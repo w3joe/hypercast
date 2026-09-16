@@ -24,6 +24,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  demoSession: () => request<import('./types').DemoSession>('/api/v1/demo/session'),
+  demoRequestCode: (email: string) => request<{ challenge_id: string }>('/api/v1/demo/request-code', { method: 'POST', body: JSON.stringify({ email }) }),
+  demoVerify: (challenge_id: string, code: string) => request<{ authenticated: boolean }>('/api/v1/demo/verify', { method: 'POST', body: JSON.stringify({ challenge_id, code }) }),
+  demoLogout: () => request('/api/v1/demo/logout', { method: 'POST', body: '{}' }),
   forecasts: (id: string, window: number, horizon: number, seed: number, fold: number, lead: number, trial = '') =>
     request<import('./ForecastReplay').ForecastResponse>(`/api/v1/jobs/${encodeURIComponent(id)}/forecasts?${new URLSearchParams({ window: String(window), horizon: String(horizon), seed: String(seed), fold: String(fold), lead: String(lead), trial })}`),
   comparisonArchives: () => request<import('./types').ArchivedComparisonJob[]>('/api/v1/comparison-archives'),

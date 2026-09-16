@@ -16,3 +16,9 @@ data/*
 results/*
 !results/.gitkeep
 runs/
+.vercel/
+.env
+.env.*
+!.env.example
+deploy/*.secret
+deploy/*.env

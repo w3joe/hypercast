@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, FlaskConical, Cloud, Play } from 'lucide-react'
 import { api } from './api'
-import type { ArchitectureSpec, GraphSpec, Catalog, EvaluationSpec, ExecutionSpec, Job } from './types'
+import type { ArchitectureSpec, GraphSpec, Catalog, EvaluationSpec, ExecutionSpec, Job, DemoLimits } from './types'
 
 const dataColumns = ['Copper', 'FCX', 'CLP', 'SCCO']
 const batchSizes = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
@@ -50,6 +50,14 @@ export function EvaluationPanel({
 }) {
   const loadPreset = (preset: EvaluationSpec['preset']) => onChange(evaluationFromPreset(catalog, preset))
   const batchSizeOptions = [...new Set([...batchSizes, evaluation.batch_size])].sort((a, b) => a - b)
+  if (catalog.demo) return <section className="evaluation-panel panel-surface">
+    <h4>Demo settings</h4><p className="demo-run-note">512 synthetic observations · one seed and split · early stopping · limited training.</p>
+    <div className="evaluation-grid">
+      <label>Window<input type="number" min={2} max={catalog.demo.window} value={evaluation.cells[0].window} onChange={e => onChange({ ...evaluation, cells: [{ ...evaluation.cells[0], window: Number(e.target.value) }] })} /></label>
+      <label>Horizon<input type="number" min={1} max={catalog.demo.horizon} value={evaluation.cells[0].horizon} onChange={e => onChange({ ...evaluation, cells: [{ ...evaluation.cells[0], horizon: Number(e.target.value) }] })} /></label>
+      <label>Epochs<input type="number" min={1} max={catalog.demo.epochs} value={evaluation.epochs} onChange={e => onChange({ ...evaluation, epochs: Number(e.target.value) })} /></label>
+    </div><p className="demo-run-note">Up to {catalog.demo.parameters.toLocaleString()} parameters. Export your design for unrestricted training.</p>
+  </section>
   return (
     <details className="evaluation-panel panel-surface">
       <summary><FlaskConical size={16} />Evaluation settings<span>{evaluation.preset}</span></summary>
@@ -80,11 +88,13 @@ export function RunControls({
   evaluation,
   disabled,
   onQueued,
+  demo,
 }: {
   architecture: ArchitectureSpec | GraphSpec
   evaluation: EvaluationSpec
   disabled: boolean
   onQueued: (job: Job) => void
+  demo?: DemoLimits
 }) {
   const queryClient = useQueryClient()
   const [target, setTarget] = useState<ExecutionSpec['target']>('local')
@@ -94,16 +104,18 @@ export function RunControls({
   const compute = useQuery({
     queryKey: ['compute-capabilities'],
     queryFn: api.compute,
-    enabled: target !== 'local',
+    enabled: !demo && target !== 'local',
     staleTime: 10_000,
   })
   const mutation = useMutation({
     mutationFn: (execution: ExecutionSpec) => api.submit(architecture, evaluation, execution),
     onSuccess: (job) => {
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['demo-session'] })
       onQueued(job)
     },
   })
+  const session = useQuery({ queryKey: ['demo-session'], queryFn: api.demoSession, enabled: Boolean(demo) })
   const modal = compute.data?.modal
   const gcp = compute.data?.gcp
   const gcpGpus = gcp?.gpus ?? [
@@ -115,6 +127,14 @@ export function RunControls({
     : target === 'gcp' ? { target: 'gcp', gpu: gcpGpu, gpu_count: gpuCount }
     : { target: 'local', gpu: null }
   const canSubmit = target === 'local' || Boolean(target === 'gcp' ? gcp?.available : modal?.available)
+
+  if (demo) return <div className="run-control-stack">
+    <p className="demo-run-note">L4 demo · up to {demo.run_seconds / 60} minutes · {session.data?.remaining_runs ?? '…'} runs left today (UTC). Failed and cancelled experiments count toward your allowance.</p>
+    {!session.data?.demo_available && session.data && <p role="status">The shared demo allowance is exhausted for this month.</p>}
+    <button className="primary-button" disabled={disabled || mutation.isPending || !session.data?.authenticated || !session.data.demo_available || session.data.remaining_runs < 1}
+      onClick={() => mutation.mutate({ target: 'modal', gpu: 'L4' })}><Play size={15} />{mutation.isPending ? 'Queueing…' : 'Run demo experiment'}</button>
+    <ErrorNotice error={session.error || mutation.error} />
+  </div>
 
   return (
     <div className="run-control-stack">

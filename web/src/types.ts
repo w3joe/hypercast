@@ -85,6 +85,7 @@ export type CatalogLayer = {
 }
 
 export type Catalog = {
+  demo?: DemoLimits
   method_collection?: MethodCollection
   schema_version: number
   categories: { name: string; layers: CatalogLayer[] }[]
@@ -97,6 +98,9 @@ export type Catalog = {
   evaluation_presets: Record<string, EvaluationPreset>
   evaluation_defaults: EvaluationDefaults
 }
+
+export type DemoLimits = { run_seconds: number; epochs: number; runs_per_day: number; window: number; horizon: number; parameters: number; rows: number }
+export type DemoSession = { authenticated: boolean; remaining_runs: number; demo_available: boolean; limits: DemoLimits }
 
 export type MethodCollection = {
   sources: Record<string, { title: string; venue: string; url: string; pages: string }>

@@ -24,6 +24,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  forecasts: (id: string, window: number, horizon: number, seed: number, fold: number, lead: number, trial = '') =>
+    request<import('./ForecastReplay').ForecastResponse>(`/api/v1/jobs/${encodeURIComponent(id)}/forecasts?${new URLSearchParams({ window: String(window), horizon: String(horizon), seed: String(seed), fold: String(fold), lead: String(lead), trial })}`),
+  comparisonArchives: () => request<import('./types').ArchivedComparisonJob[]>('/api/v1/comparison-archives'),
+  archivedForecasts: (id: string, window: number, horizon: number, seed: number, fold: number, lead: number) =>
+    request<import('./ForecastReplay').ForecastResponse>(`/api/v1/comparison-archives/${encodeURIComponent(id)}/forecasts?${new URLSearchParams({ window: String(window), horizon: String(horizon), seed: String(seed), fold: String(fold), lead: String(lead) })}`),
+  trainedWeights: (id: string) => request<Record<string, import('./WeightInspector').WeightSnapshot>>(`/api/v1/jobs/${encodeURIComponent(id)}/weights`),
+  previewWeights: (architecture: GraphSpec, window: number, horizon: number) => request<import('./WeightInspector').WeightSnapshot>('/api/v1/architectures/weights', { method: 'POST', body: JSON.stringify({ architecture, window, horizon }) }),
+  editGraph: (architecture: GraphSpec, edit: { action: string; id: string; kind: string; params: Record<string, unknown> }, cells: { window: number; horizon: number }[]) =>
+    request<{ spec: GraphSpec; warnings: string[] }>('/api/v1/architectures/edit', { method: 'POST', body: JSON.stringify({ architecture, edit, cells }) }),
   describeGraph: (architecture: GraphSpec, window: number, horizon: number) =>
     request<Pick<GraphValidation, 'graph_nodes'>>('/api/v1/architectures/describe', { method: 'POST', body: JSON.stringify({ architecture, window, horizon }) }),
   convert: (architecture: ArchitectureSpec | GraphSpec, window: number, horizon: number) =>

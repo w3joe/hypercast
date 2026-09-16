@@ -1,4 +1,4 @@
-"""Run the bounded, leakage-safe HyperCast4D evaluation matrix."""
+"""Run the bounded, leakage-safe Hypercast evaluation matrix."""
 
 from __future__ import annotations
 

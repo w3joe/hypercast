@@ -1,0 +1,209 @@
+{
+  "protocol": "hyperdense-etth1-v2-proposal",
+  "status": "planned_not_implemented_not_authorized",
+  "backbones": [
+    "micn",
+    "film"
+  ],
+  "arms": [
+    "native",
+    "real",
+    "complex",
+    "quaternion",
+    "octonion",
+    "lowrank2",
+    "lowrank4",
+    "lowrank8"
+  ],
+  "formulation": "relative_residual",
+  "features": 7,
+  "context": 32,
+  "horizon": 5,
+  "grid": [
+    {
+      "id": 0,
+      "learning_rate": 0.0001,
+      "selected_weight_amplitude": 0.5,
+      "schedule": "constant"
+    },
+    {
+      "id": 1,
+      "learning_rate": 0.0001,
+      "selected_weight_amplitude": 0.5,
+      "schedule": "exponential"
+    },
+    {
+      "id": 2,
+      "learning_rate": 0.0001,
+      "selected_weight_amplitude": 1.0,
+      "schedule": "constant"
+    },
+    {
+      "id": 3,
+      "learning_rate": 0.0001,
+      "selected_weight_amplitude": 1.0,
+      "schedule": "exponential"
+    },
+    {
+      "id": 4,
+      "learning_rate": 0.0003,
+      "selected_weight_amplitude": 0.5,
+      "schedule": "constant"
+    },
+    {
+      "id": 5,
+      "learning_rate": 0.0003,
+      "selected_weight_amplitude": 0.5,
+      "schedule": "exponential"
+    },
+    {
+      "id": 6,
+      "learning_rate": 0.0003,
+      "selected_weight_amplitude": 1.0,
+      "schedule": "constant"
+    },
+    {
+      "id": 7,
+      "learning_rate": 0.0003,
+      "selected_weight_amplitude": 1.0,
+      "schedule": "exponential"
+    },
+    {
+      "id": 8,
+      "learning_rate": 0.001,
+      "selected_weight_amplitude": 0.5,
+      "schedule": "constant"
+    },
+    {
+      "id": 9,
+      "learning_rate": 0.001,
+      "selected_weight_amplitude": 0.5,
+      "schedule": "exponential"
+    },
+    {
+      "id": 10,
+      "learning_rate": 0.001,
+      "selected_weight_amplitude": 1.0,
+      "schedule": "constant"
+    },
+    {
+      "id": 11,
+      "learning_rate": 0.001,
+      "selected_weight_amplitude": 1.0,
+      "schedule": "exponential"
+    }
+  ],
+  "optimizer": {
+    "name": "Adam",
+    "betas": [
+      0.9,
+      0.999
+    ],
+    "epsilon": 1e-07,
+    "weight_decay": 0
+  },
+  "training_loss": "MAE",
+  "batch_size": 32,
+  "epochs": 150,
+  "patience": 20,
+  "exponential_gamma": 0.98,
+  "precision": "IEEE FP32 explicit, no autocast",
+  "gradient_clipping": null,
+  "seeds": {
+    "calibration": 2300,
+    "search": 2301,
+    "reranking": 2302,
+    "confirmation": [
+      2401,
+      2402,
+      2403,
+      2404,
+      2405
+    ],
+    "bootstrap": 2501
+  },
+  "fits": {
+    "calibration_short": 16,
+    "search": 192,
+    "reranking": 32,
+    "confirmation": 80,
+    "total_full": 304
+  },
+  "concurrent_l4": 2,
+  "retries": 0,
+  "test_scoring_authorized": false,
+  "statistical_plan": {
+    "block_origins": 168,
+    "sensitivity_blocks": [
+      24,
+      336
+    ],
+    "bootstrap_replicates": 10000,
+    "paired_hierarchical": true,
+    "primary_contrasts": 24,
+    "one_sided_family_alpha": 0.05,
+    "correction": "Bonferroni",
+    "accuracy_ratio_bound_native_real": 0.98,
+    "accuracy_ratio_bound_persistence_matched_lowrank": 1.0,
+    "noninferiority_ratio_bound": 1.02,
+    "native_parameter_saving_required": 0.25
+  },
+  "cost": {
+    "hourly_rate_reference": 0.9266,
+    "rate_is_prior_cli_not_fresh_cli": true,
+    "public_pricing_checked": "2026-09-12",
+    "gate_jobs": 1,
+    "calibration_jobs": 16,
+    "seconds_per_attempt": 600,
+    "reservation_per_attempt_usd": 0.60596,
+    "total_reservations_usd": 10.30132,
+    "admission_with_margin_reserve_usd": 13.361584,
+    "provisional_calibration_cap_usd": 14,
+    "full_stage_cap_usd": null,
+    "native_timeout_scenario_full_fits_reservations_usd": 360.26583999999997,
+    "scenario_is_not_quote_or_bound": true
+  },
+  "sources": [
+    {
+      "title": "Quaternion Networks",
+      "url": "https://aclanthology.org/P19-1145.pdf",
+      "sections": "4.1, 4.3"
+    },
+    {
+      "title": "Deep Complex Networks",
+      "url": "https://arxiv.org/pdf/1705.09792",
+      "sections": "3.6 and speech-spectrum experiment"
+    },
+    {
+      "title": "Deep Quaternion Networks",
+      "url": "https://arxiv.org/pdf/1712.04604",
+      "sections": "III.E, IV.A"
+    },
+    {
+      "title": "FIA-Net v1",
+      "url": "https://arxiv.org/html/2502.19983v1",
+      "sections": "4.2, 5.1, B.3, D.4"
+    },
+    {
+      "title": "FreTS",
+      "url": "https://proceedings.nips.cc/paper_files/paper/2023/file/f1d16af76939f476b5f040fd1398c0a3-Paper-Conference.pdf",
+      "sections": "B.3-B.5"
+    },
+    {
+      "title": "FiLM",
+      "url": "https://papers.nips.cc/paper_files/paper/2022/file/524ef58c2bd075775861234266e5e020-Paper-Conference.pdf",
+      "sections": "3, Table 3"
+    },
+    {
+      "title": "PHM",
+      "url": "https://arxiv.org/pdf/2102.08597",
+      "sections": "3, B"
+    }
+  ],
+  "evidence_sha256": {
+    "results/etth1-transfer/prepared-v3/manifest.json": "696fe3a19bb774394151c7441c9c44dafd0f45b7080a1e0ae8a73ed880ea8c1d",
+    "results/etth1-transfer/development-001/development-decision.json": "2349bc9ada80f873930e7d5acd9c8611bd0fe096f797ea06de533db9fb072150",
+    "results/etth1-transfer/development-001/analysis.json": "f0db3b55d97d2b88c007e41dd679826845c6df69284921ac9b3ad9e0b2b85384",
+    "results/etth1-transfer/development-001/next-control-site-inventory.json": "3992dfe2db1da17c9f6d25efe89113e4ddc30467267f353cbbc5b629ae000c81"
+  }
+}

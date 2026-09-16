@@ -15,13 +15,26 @@ from torch.fx import Node
 
 from .algebras import get_algebra
 from .graph_lowering import lower_source
-from .layers import HyperDense
+from .layers import HyperDense, ShapePreservingHyperDense
 
 
 REVISION = 'source-graph-1-tslib-4e938a1767106324dd753b2a44832bf870a0252e'
 NEW_OPS = {'dense', 'activation', 'dropout', 'add', 'multiply', 'concat', 'flatten',
            'mean_pool', 'last_state', 'layer_norm', 'causal_conv', 'tcn', 'gru', 'lstm', 'hyper_dense',
            'reshape', 'permute', 'softmax'}
+
+
+def normalize_hyperdense_params(params):
+    """Graph-only auto-fit policy; absent mode retains legacy manual semantics."""
+    from .architecture import _normalize_layer_params
+    mode = params.get('shape_mode', 'manual')
+    if mode not in ('manual', 'preserve'):
+        raise ValueError('HyperDense shape_mode must be preserve or manual')
+    if type(params.get('bias', True)) is not bool:
+        raise ValueError('bias must be true or false')
+    # Units are derived from the connection in preserve mode, not a saved preview.
+    normalized = _normalize_layer_params('hyper_dense', {**params, **({'units': 1} if mode == 'preserve' else {})})
+    return {**normalized, 'shape_mode': mode, 'bias': params.get('bias', True)}
 
 
 def normalize_graph(raw):
@@ -56,6 +69,8 @@ def normalize_graph(raw):
         params = node.get('params', {})
         if not isinstance(params, dict) or len(json.dumps(params, allow_nan=False)) > 8192:
             raise ValueError(f'{key}: invalid parameters')
+        if kind == 'hyper_dense':
+            normalize_hyperdense_params(params)
         item = {'id': key, 'kind': kind, 'params': copy.deepcopy(params)}
         if kind == 'source':
             ref = node.get('source_ref', {})
@@ -442,8 +457,11 @@ class GraphForecaster(nn.Module):
                 p = dict(params)
                 if kind == 'dense' and p.get('units') == 'horizon':
                     p['units'] = self.horizon
-                normalized = _normalize_layer_params(kind, p)
+                normalized = normalize_hyperdense_params(p) if kind == 'hyper_dense' else _normalize_layer_params(kind, p)
                 x = args[0]
+                preserve = kind == 'hyper_dense' and normalized['shape_mode'] == 'preserve'
+                if preserve:
+                    ShapePreservingHyperDense.validate_input(x)
                 shape = TensorShape('sequence', x.shape[-1], x.shape[1]) if x.ndim == 3 else TensorShape('vector', x.shape[-1])
                 if kind in {'dense', 'hyper_dense'}:
                     if x.ndim < 2:
@@ -453,12 +471,13 @@ class GraphForecaster(nn.Module):
                     if kind == 'hyper_dense':
                         algebra = get_algebra(normalized['algebra'])
                         dimension = algebra.component_count
-                        if x.shape[-1] % dimension:
+                        if not preserve and x.shape[-1] % dimension:
                             raise ValueError(
                                 f'HyperDense input width must be divisible by '
                                 f'{dimension} for {algebra.name}'
                             )
-                        module = HyperDense(x.shape[-1] // dimension, normalized['units'], algebra, bias=p.get('bias', True))
+                        module = (ShapePreservingHyperDense(x.shape[-1], algebra, bias=p.get('bias', True)) if preserve
+                                  else HyperDense(x.shape[-1] // dimension, normalized['units'], algebra, bias=p.get('bias', True)))
                     else:
                         module = nn.Linear(x.shape[-1], normalized['units'], bias=p.get('bias', True))
                 else:
@@ -472,6 +491,9 @@ class GraphForecaster(nn.Module):
         if self._constructing:
             self.metadata[node['id']] = {'label': kind, 'ports': ports, 'shape': _shapes(value),
                                          'settings': params, 'category': 'custom', 'source_path': None}
+            module = self.blocks[self.bindings[node['id']]] if node['id'] in self.bindings else None
+            if isinstance(module, ShapePreservingHyperDense):
+                self.metadata[node['id']]['shape_fit'] = module.shape_fit
         return value
 
     def forward(self, inputs):
@@ -481,7 +503,8 @@ class GraphForecaster(nn.Module):
             try:
                 values[key] = self._source(node, values, inputs) if node['kind'] == 'source' else self._new(node, values)
             except Exception as error:
-                raise ValueError(f'Node {key}: {error}') from error
+                shapes = {port: _shapes(values[parent]) for port, parent in self.incoming[key].items() if parent in values}
+                raise ValueError(f'Node {key}: {error}; input shapes: {shapes}') from error
         result = values[self.spec['output']]
         if not isinstance(result, torch.Tensor) or result.shape != (inputs.shape[0], self.horizon):
             raise ValueError(f'Forecast output must be [batch, {self.horizon}], got {_shapes(result)}')

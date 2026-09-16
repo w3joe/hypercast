@@ -1,25 +1,19 @@
-import ELK from 'elkjs/lib/elk.bundled.js'
-import { MarkerType } from '@xyflow/react'
-import type { Edge, Node } from '@xyflow/react'
 import type { GraphSpec, GraphNodeSpec, GraphNodeInfo, GraphViewState, GraphEdgeSpec } from './types'
 
 export const uid = (prefix = 'node') => `${prefix}-${crypto.randomUUID().slice(0, 8)}`
-export const emptyView = (): GraphViewState => ({ positions: {}, collapsed: [] })
+export const emptyView = (): GraphViewState => ({ positions: {}, collapsed: [], direction: 'LR', renderer: 'flow', version: 1 })
 export function safeView(raw: unknown, graph: GraphSpec): GraphViewState {
   const value = raw as Partial<GraphViewState> | undefined
-  const known = new Set([...graph.nodes.map(n => n.id), ...graph.groups.map(g => groupId(g.id))])
-  return { positions: Object.fromEntries(Object.entries(value?.positions ?? {}).filter(([id, p]) => known.has(id) && p && Number.isFinite(p.x) && Number.isFinite(p.y))),
-    collapsed: Array.isArray(value?.collapsed) ? value.collapsed.filter(id => graph.groups.some(g => g.id === id)) : [] }
+  // Manual placements belong to the previous freeform editor. Arrange those
+  // views afresh and refit rather than restoring a camera at an obsolete node.
+  const hasManualPositions = value?.positions && Object.keys(value.positions).length > 0
+  const camera = value?.renderer === 'flow' && value.version === 1 && !hasManualPositions ? value.camera : undefined
+  return { ...emptyView(), collapsed: Array.isArray(value?.collapsed) ? value.collapsed.filter(id => graph.groups.some(g => g.id === id)) : graph.groups.map(g => g.id),
+    ...(Array.isArray(value?.expandedStages) ? { expandedStages: value.expandedStages.filter((id): id is string => typeof id === 'string') } : {}),
+    ...(camera && [camera.panX, camera.panY, camera.zoom].every(Number.isFinite) && camera.zoom > 0 ? { camera: { panX: camera.panX, panY: camera.panY, zoom: Math.min(3, Math.max(.025, camera.zoom)) } } : {}) }
 }
 export const edgeId = (e: GraphEdgeSpec) => JSON.stringify([e.source, e.target, e.port])
 export const groupId = (id: string) => `group:${id}`
-export const portHandle = (node: string, port: string) => JSON.stringify([node, port])
-export function parseHandle(handle: string | null | undefined): [string, string] {
-  if (!handle) throw new Error('Choose a connection handle.')
-  const parsed = JSON.parse(handle)
-  if (!Array.isArray(parsed) || parsed.length !== 2) throw new Error('Invalid connection handle.')
-  return parsed as [string, string]
-}
 export function portsFor(node: GraphNodeSpec, graph: GraphSpec, info: Record<string, GraphNodeInfo>): string[] {
   return info[node.id]?.ports ?? (node.kind === 'source'
     ? [...new Set(graph.edges.filter(e => e.target === node.id).map(e => e.port))]
@@ -40,6 +34,31 @@ export function connectGraph(graph: GraphSpec, edge: GraphEdgeSpec, replacing?: 
   }
   return { ...graph, edges: [...edges, edge] }
 }
+// One atomic edit: detach a unary layer, heal its old chain, then split the target edge.
+// Ambiguous branches and graph endpoints are deliberately left for explicit wiring.
+export function insertOnEdge(graph: GraphSpec, node: GraphNodeSpec, targetEdge: string, info: Record<string, GraphNodeInfo> = {}): GraphSpec {
+  if (graph.locked) throw new Error('Clone to edit this model.')
+  const edge = graph.edges.find(e => edgeId(e) === targetEdge)
+  if (!edge) throw new Error('The connection is no longer available.')
+  if (edge.source === node.id || edge.target === node.id) throw new Error('Choose a connection between other layers.')
+  const ports = portsFor(node, graph, info)
+  if (ports.length !== 1 || ['placeholder', 'output', 'get_attr'].includes(info[node.id]?.category ?? '')) throw new Error('Only single-input layers can be inserted into a connection. Wire multi-input operations explicitly.')
+  if (graph.output === node.id) throw new Error('Choose another forecast output before moving this layer into a connection.')
+  const incoming = graph.edges.filter(e => e.target === node.id)
+  const outgoing = graph.edges.filter(e => e.source === node.id)
+  if (incoming.length > 1 || outgoing.length > 1 || (!incoming.length && outgoing.length)) throw new Error('This layer has branching connections. Reconnect its branches explicitly before moving it.')
+  const sourceGroup = graph.nodes.find(n => n.id === edge.source)?.group
+  const targetGroup = graph.nodes.find(n => n.id === edge.target)?.group
+  const inserted = { ...node, group: sourceGroup === targetGroup ? targetGroup : undefined }
+  let next: GraphSpec = { ...graph,
+    nodes: graph.nodes.some(n => n.id === node.id) ? graph.nodes.map(n => n.id === node.id ? inserted : n) : [...graph.nodes, inserted],
+    edges: graph.edges.filter(e => e.source !== node.id && e.target !== node.id && edgeId(e) !== targetEdge),
+  }
+  if (incoming.length && outgoing.length) next = connectGraph(next, { ...outgoing[0], source: incoming[0].source })
+  next = connectGraph(next, { source: edge.source, target: node.id, port: ports[0] })
+  return connectGraph(next, { ...edge, source: node.id })
+}
+
 export function duplicateGraph(graph: GraphSpec, ids: string[]): GraphSpec {
   const mapping = new Map(ids.map(id => [id, uid()]))
   const refs = new Map<string, string>()
@@ -65,69 +84,4 @@ export function appendGraph(graph: GraphSpec, template: GraphSpec, info: Record<
   return { ...graph, sources: { ...graph.sources, ...Object.fromEntries(Object.entries(template.sources).map(([k, v]) => [sourceMapping[k], v])) },
     nodes: [...graph.nodes, ...nodes], edges: [...graph.edges, ...template.edges.map(e => ({ ...e, source: mapping[e.source], target: mapping[e.target] }))],
     groups: [...graph.groups, { id: group, label: template.name }] }
-}
-export type CanvasData = {
-  label: string; ports: { id: string; label: string }[]; outputs: { id: string; label: string }[]
-  shape?: unknown; category?: string; output?: boolean; group?: string; collapsed?: boolean
-  onToggle?: () => void
-  [key: string]: unknown
-}
-const elk = new ELK()
-async function arrange(ids: string[], edges: { source: string; target: string }[], sizes: Record<string, { width: number; height: number }>) {
-  if (!ids.length) return { positions: {}, width: 300, height: 160 }
-  const result = await elk.layout({ id: 'root', width: 0, height: 0, layoutOptions: { 'elk.algorithm': 'layered', 'elk.direction': 'DOWN', 'elk.spacing.nodeNode': '40', 'elk.layered.spacing.nodeNodeBetweenLayers': '65' },
-    children: ids.map(id => ({ id, ...sizes[id] })),
-    edges: edges.filter(e => ids.includes(e.source) && ids.includes(e.target) && e.source !== e.target).map((e, i) => ({ id: `e${i}`, sources: [e.source], targets: [e.target] })) })
-  return { positions: Object.fromEntries((result.children ?? []).map(n => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }])), width: result.width ?? 300, height: result.height ?? 160 }
-}
-export async function projectGraph(graph: GraphSpec, info: Record<string, GraphNodeInfo>, view: GraphViewState, toggle: (id: string) => void): Promise<{ nodes: Node<CanvasData>[]; edges: Edge[] }> {
-  const groups = graph.groups.filter(g => graph.nodes.some(n => n.group === g.id))
-  const groupSet = new Set(groups.map(g => g.id))
-  const byId = Object.fromEntries(graph.nodes.map(n => [n.id, n]))
-  const collapsed = new Set(view.collapsed)
-  const visibleId = (id: string) => byId[id]?.group && collapsed.has(byId[id].group!) ? groupId(byId[id].group!) : id
-  const edges: Edge[] = graph.edges.flatMap(e => {
-    const source = visibleId(e.source), target = visibleId(e.target)
-    if (source === target && source.startsWith('group:')) return []
-    return [{ id: edgeId(e), source, target, sourceHandle: portHandle(e.source, 'out'), targetHandle: portHandle(e.target, e.port), type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed, color: '#94a3b8' } }]
-  })
-  const sizes: Record<string, { width: number; height: number }> = {}
-  for (const n of graph.nodes) sizes[n.id] = { width: Math.max(240, portsFor(n, graph, info).length * 22 + 40), height: 90 }
-  const layouts: Record<string, Awaited<ReturnType<typeof arrange>>> = {}
-  for (const g of groups) {
-    const id = groupId(g.id)
-    if (collapsed.has(g.id)) {
-      const inputs = new Set(edges.filter(e => e.target === id).map(e => e.targetHandle))
-      const outputs = new Set(edges.filter(e => e.source === id).map(e => e.sourceHandle))
-      sizes[id] = { width: Math.max(300, Math.max(inputs.size, outputs.size) * 22 + 40), height: 110 }
-    } else {
-      layouts[g.id] = await arrange(graph.nodes.filter(n => n.group === g.id).map(n => n.id), graph.edges, sizes)
-      sizes[id] = { width: layouts[g.id].width + 60, height: layouts[g.id].height + 90 }
-      // Keep a manually moved child inside its parent frame.
-      for (const n of graph.nodes.filter(n => n.group === g.id)) {
-        const p = view.positions[n.id]
-        if (p) { sizes[id].width = Math.max(sizes[id].width, p.x + sizes[n.id].width + 30); sizes[id].height = Math.max(sizes[id].height, p.y + sizes[n.id].height + 30) }
-      }
-    }
-  }
-  const topId = (id: string) => byId[id]?.group && groupSet.has(byId[id].group!) ? groupId(byId[id].group!) : id
-  const topIds = [...groups.map(g => groupId(g.id)), ...graph.nodes.filter(n => !n.group || !groupSet.has(n.group)).map(n => n.id)]
-  const top = await arrange(topIds, graph.edges.map(e => ({ source: topId(e.source), target: topId(e.target) })), sizes)
-  const nodes: Node<CanvasData>[] = groups.map(g => {
-    const id = groupId(g.id), isCollapsed = collapsed.has(g.id)
-    const inputs = [...new Set(edges.filter(e => e.target === id).map(e => e.targetHandle!))]
-    const outputs = [...new Set(edges.filter(e => e.source === id).map(e => e.sourceHandle!))]
-    return { id, type: 'graphGroup', position: view.positions[id] ?? top.positions[id] ?? { x: 0, y: 0 }, style: sizes[id],
-      data: { label: g.label, group: g.id, collapsed: isCollapsed, onToggle: () => toggle(g.id), ports: inputs.map(h => ({ id: h, label: parseHandle(h)[1] })), outputs: outputs.map(h => ({ id: h, label: byId[parseHandle(h)[0]]?.label ?? 'out' })) } }
-  })
-  for (const n of graph.nodes) {
-    if (n.group && collapsed.has(n.group)) continue
-    const grouped = n.group && groupSet.has(n.group)
-    const pos = grouped ? layouts[n.group!]?.positions[n.id] : top.positions[n.id]
-    nodes.push({ id: n.id, type: 'graphOp', parentId: grouped ? groupId(n.group!) : undefined,
-      position: view.positions[n.id] ?? { x: (pos?.x ?? 0) + (grouped ? 30 : 0), y: (pos?.y ?? 0) + (grouped ? 60 : 0) }, style: sizes[n.id],
-      data: { label: n.label ?? info[n.id]?.label ?? n.source_ref?.node ?? n.kind, category: info[n.id]?.category ?? n.kind, shape: info[n.id]?.shape, output: graph.output === n.id,
-        ports: portsFor(n, graph, info).map(p => ({ id: portHandle(n.id, p), label: p })), outputs: [{ id: portHandle(n.id, 'out'), label: 'out' }] } })
-  }
-  return { nodes, edges }
 }

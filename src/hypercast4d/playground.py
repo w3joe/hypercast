@@ -1,4 +1,4 @@
-"""Local API and static frontend for the HyperCast4D architecture playground."""
+"""Local API and static frontend for the Hypercast architecture playground."""
 
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ def _csv_rows(path: Path) -> list[dict[str, Any]]:
 class JobManager:
     """Persistent, single-worker FIFO queue for local training processes."""
 
-    def __init__(self, root: Path, project_root: Path) -> None:
+    def __init__(self, root: Path, project_root: Path, *, recover: bool = True) -> None:
         self.root = root.resolve()
         self.project_root = project_root.resolve()
         self.jobs_root = self.root / "jobs"
@@ -95,7 +95,8 @@ class JobManager:
         self.active_id: str | None = None
         self.active_process: subprocess.Popen[str] | None = None
         self.thread: threading.Thread | None = None
-        self._recover_jobs()
+        if recover:
+            self._recover_jobs()
 
     def _recover_jobs(self) -> None:
         for directory in sorted(self.jobs_root.iterdir()):
@@ -295,7 +296,7 @@ class JobManager:
             }
         )
 
-    def submit_final_test(self, parent_id: str) -> dict[str, Any]:
+    def submit_final_test(self, parent_id: str, timeout_seconds: int | None = None) -> dict[str, Any]:
         parent = self.get_job(parent_id)
         if parent["status"].get("state") != "complete":
             raise ValueError("validation job must be complete")
@@ -305,6 +306,9 @@ class JobManager:
         if request["evaluation"]["preset"] == "quick":
             raise ValueError("Quick runs cannot unlock the held-out test set")
         candidate_hash = request["candidate_hash"]
+        execution = request.get("execution", {"target": "local"})
+        if timeout_seconds is not None:
+            execution = normalize_execution({**execution, "timeout_seconds": timeout_seconds})
         for job in self.list_jobs():
             status = job["status"]
             if (
@@ -321,7 +325,7 @@ class JobManager:
                 "parent_job_dir": str(self.jobs_root / parent_id),
                 "architecture": request["architecture"],
                 "evaluation": request["evaluation"],
-                "execution": request.get("execution", {"target": "local"}),
+                "execution": execution,
             }
         )
 
@@ -370,18 +374,29 @@ def create_app(
     results_root: Path = Path("results/playground"),
     project_root: Path | None = None,
     legacy_results: Path = Path("results/evaluation"),
+    *, server_url: str | None = None,
 ) -> FastAPI:
     project_root = (project_root or Path.cwd()).resolve()
-    manager = JobManager(results_root, project_root)
+    manager = JobManager(results_root, project_root, recover=False)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        manager.start()
-        yield
-        manager.stop()
+        from .workspace_runtime import workspace_owner
+        with workspace_owner(project_root, results_root, server_url):
+            manager._recover_jobs()
+            manager.start()
+            try:
+                yield
+            finally:
+                manager.stop()
 
-    app = FastAPI(title="HyperCast4D Playground", lifespan=lifespan)
+    app = FastAPI(title="Hypercast Playground", lifespan=lifespan)
     app.state.manager = manager
+
+    @app.get('/api/v1/identity')
+    def backend_identity():
+        from .workspace_runtime import identity
+        return identity(project_root, results_root)
 
     @app.exception_handler(ArchitectureError)
     async def architecture_error_handler(_, error: ArchitectureError):
@@ -416,6 +431,20 @@ def create_app(
             horizon = int(payload.get("horizon", 1))
             return validate_architecture(payload["architecture"], window, horizon)
         except (KeyError, TypeError, ValueError, ArchitectureError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
+    @app.post('/api/v1/architectures/edit')
+    def edit_architecture(payload: dict[str, Any]):
+        from .model_editing import checked, edit_layer
+        try:
+            cells = normalize_evaluation({'cells': payload.get('cells', [{'window': 10, 'horizon': 1}])})['cells']
+            edit = payload['edit']
+            result = edit_layer(payload['architecture'], edit['action'], node_id=edit.get('id'),
+                                kind=edit.get('kind'), params=edit.get('params', {}),
+                                before=edit.get('before'), after=edit.get('after'), port=edit.get('port'), cells=cells)
+            result, warnings = checked(result, cells, allow_invalid=bool(payload.get('allow_invalid', False)))
+            return {'spec': result, 'warnings': warnings}
+        except (KeyError, TypeError, ValueError, RuntimeError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
     @app.post("/api/v1/architectures/internal-graph")
@@ -460,6 +489,24 @@ def create_app(
         except KeyError as error:
             raise HTTPException(status_code=404, detail="architecture not found") from error
 
+    @app.get('/api/v1/comparison-archives')
+    def comparison_archives():
+        from .comparison_archives import list_archives
+        try:
+            return list_archives(manager.root, project_root)
+        except (ValueError, KeyError, OSError) as error:
+            raise HTTPException(status_code=422, detail=f'Cannot load comparison archive: {error}') from error
+
+    @app.get('/api/v1/comparison-archives/{record_id}/forecasts')
+    def archived_forecasts(record_id: str, window: int, horizon: int, seed: int, fold: int, lead: int = 1):
+        from .comparison_archives import read_archive_forecasts
+        try:
+            return read_archive_forecasts(manager.root, project_root, record_id, window=window, horizon=horizon, seed=seed, fold=fold, lead=lead)
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail='Comparison archive not found') from error
+        except (ValueError, OSError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
     @app.get("/api/v1/jobs")
     def list_jobs() -> list[dict[str, Any]]:
         return manager.list_jobs()
@@ -498,9 +545,11 @@ def create_app(
             raise HTTPException(status_code=404, detail="job not found") from error
 
     @app.post("/api/v1/jobs/{job_id}/final-test")
-    def final_test(job_id: str) -> dict[str, Any]:
+    def final_test(job_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
-            return manager.submit_final_test(job_id)
+            if set(payload or {}) - {"timeout_seconds"}:
+                raise ValueError("final-test accepts only a timeout override; training settings are inherited")
+            return manager.submit_final_test(job_id, (payload or {}).get("timeout_seconds"))
         except KeyError as error:
             raise HTTPException(status_code=404, detail="job not found") from error
         except ValueError as error:
@@ -516,6 +565,45 @@ def create_app(
         if not path.is_file():
             raise HTTPException(status_code=404, detail="This run has no saved individual forecasts")
         return FileResponse(path, media_type="text/csv", filename=f"{job_id}-predictions.csv")
+
+    @app.get('/api/v1/jobs/{job_id}/forecasts')
+    def forecasts(job_id: str, window: int, horizon: int, seed: int, fold: int, lead: int = 1, trial: str = ''):
+        from .visualizations import read_forecasts
+        try:
+            manager.get_job(job_id)
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail='Job not found') from error
+        if not 1 <= lead <= horizon or window < 1:
+            raise HTTPException(status_code=422, detail='Invalid forecast cell or lead')
+        path = manager.jobs_root / job_id / 'predictions.csv'
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail='This run has no saved individual forecasts')
+        return read_forecasts(path, window=window, horizon=horizon, seed=seed, fold=fold, lead=lead, trial=trial)
+
+    @app.get('/api/v1/jobs/{job_id}/weights')
+    def trained_weights(job_id: str):
+        try:
+            manager.get_job(job_id)
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail='Job not found') from error
+        records = _read_json(manager.jobs_root / job_id / 'weights.json')
+        if records is None:
+            raise HTTPException(status_code=404, detail='This run predates saved weight snapshots. New runs save trained HyperDense weights.')
+        return records
+
+    @app.post('/api/v1/architectures/weights')
+    def initialized_weights(payload: dict[str, Any]):
+        import torch
+        from .architecture import build_architecture
+        from .visualizations import model_weights
+        try:
+            # Inspect a deterministic initialization without changing training RNG state.
+            with torch.random.fork_rng(devices=[]):
+                torch.random.default_generator.manual_seed(0)
+                model = build_architecture(payload['architecture'], int(payload.get('window', 10)), int(payload.get('horizon', 1)))
+                return {'source': 'initialized', 'seed': 0, **model_weights(model)}
+        except (KeyError, TypeError, ValueError, RuntimeError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
     @app.get("/api/runs")
     def legacy_runs() -> list[dict[str, Any]]:
@@ -572,15 +660,15 @@ def main() -> None:
         parser.error("the playground is local-only; host must be 127.0.0.1 or localhost")
     if args.refresh_seconds <= 0:
         parser.error("--refresh-seconds must be positive")
-    url = f"http://{args.host}:{args.port}"
+    from .workspace_runtime import discover, serve
+    existing = discover(Path.cwd(), args.results_root.resolve())
+    url = existing['url'] if existing else f"http://{args.host}:{args.port}"
     if not args.no_browser:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
-    uvicorn.run(
-        create_app(args.results_root, Path.cwd(), args.results),
-        host=args.host,
-        port=args.port,
-        log_level="info",
-    )
+    if existing:
+        print(f'Using existing playground: {url}')
+        return
+    serve(Path.cwd(), args.results_root, args.port, args.results)
 
 
 if __name__ == "__main__":

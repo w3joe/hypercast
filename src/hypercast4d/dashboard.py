@@ -1,4 +1,4 @@
-"""Legacy result readers plus the unified HyperCast4D playground entry point."""
+"""Legacy result readers plus the unified Hypercast playground entry point."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ DASHBOARD_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HyperCast4D Live Results</title>
+  <title>Hypercast Live Results</title>
   <style>
     :root {
       color-scheme: dark;
@@ -106,7 +106,7 @@ DASHBOARD_HTML = r"""<!doctype html>
 <main>
   <header>
     <div>
-      <h1>HyperCast<span>4D</span></h1>
+      <h1>Hypercast</h1>
       <p id="subtitle" class="subtitle">Live leakage-safe forecasting results. The page reads the experiment's CSV output and refreshes automatically.</p>
     </div>
     <div id="status-badge" class="badge">Waiting for results</div>
@@ -153,7 +153,7 @@ DASHBOARD_HTML = r"""<!doctype html>
       </table>
     </div>
   </section>
-  <footer>Served locally by HyperCast4D · no experiment data leaves this machine</footer>
+  <footer>Served locally by Hypercast · no experiment data leaves this machine</footer>
 </main>
 <script>
 const order = ['persistence','linear','cnn','lstm','hyper','hyper_quaternion','hyper_coquaternion','hyper_cl11'];

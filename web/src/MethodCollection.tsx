@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { ArrowUpRight, Layers3, Search, BookOpen } from 'lucide-react'
 import type { Catalog } from './types'
+import { SidePanel } from './WorkspacePanels'
 
-export default function MethodCollection({ catalog, onLoad }: {
+export default function MethodCollection({ catalog, onLoad, active = true }: {
   catalog: Catalog
   onLoad: (id: string) => void
+  active?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [family, setFamily] = useState('all')
@@ -20,12 +22,12 @@ export default function MethodCollection({ catalog, onLoad }: {
   const orderedMethods = [...methods].sort((a, b) => Number(Boolean(b.preset_id)) - Number(Boolean(a.preset_id)))
   return <section className="method-collection" aria-label="Method collection">
     <div className="library-intro"><BookOpen size={20} /><div><h2>Method collection</h2><p>{collection.methods.length} methods · {Object.keys(collection.sources).length} research papers · {collection.methods.filter((method) => method.preset_id).length} ready to try</p></div></div>
-    <div className="method-filters">
+    <SidePanel active={active}><div className="method-filters">
       <label className="method-search">Search methods<div><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a model or architecture…" /></div></label>
       <label>Architecture family<select value={family} onChange={(event) => setFamily(event.target.value)}><option value="all">All families</option>{[...new Set(collection.methods.map((method) => method.family))].sort().map((item) => <option key={item}>{item}</option>)}</select></label>
       <label>Source paper<select value={source} onChange={(event) => setSource(event.target.value)}><option value="all">All papers</option>{Object.entries(collection.sources).map(([id, item]) => <option value={id} key={id}>{item.title}</option>)}</select></label>
       <label className="checkbox-row"><input type="checkbox" checked={available} onChange={(event) => setAvailable(event.target.checked)} />Runnable only</label>
-    </div>
+    </div></SidePanel>
     <div className="library-results"><p>{methods.length} matching methods</p><span>Runnable methods first</span></div>
     <div className="method-grid">{orderedMethods.map((method) => <article className={`method-card ${method.preset_id ? 'method-ready' : ''}`} key={method.id}>
       <div className="method-card-top"><span className="method-icon"><Layers3 size={20} /></span><span className={`method-status ${method.preset_id ? 'ready' : ''}`}>{method.kind === 'non-neural baseline' ? 'Non-neural baseline' : method.preset_id ? 'Ready to try' : 'Paper reference'}</span></div>

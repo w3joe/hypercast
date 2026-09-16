@@ -16,6 +16,23 @@ function job(id: string, rows: Job['per_lead'], preset = 'standard'): Job {
 const row = { window: 10, horizon: 1, lead: 1, mae: 2, persistence_mae: 3, directional_accuracy: .75, direction_baseline_accuracy: .5, return_correlation: null, bias: -1, p95_abs_error: 4, large_move_mae: null, large_move_mae_ratio: null, large_move_count: 0, sample_count: 12, large_move_threshold: .02 }
 
 describe('forecast diagnostics', () => {
+  it('limits crowded comparisons and lets users choose other runs', () => {
+    render(<ForecastDiagnostics jobs={Array.from({ length: 20 }, (_, i) => job(`run-${i}`, [row]))} />)
+    expect(screen.getByText('Compare runs · 4 of 20 selected')).toBeInTheDocument()
+    const points = () => JSON.parse(screen.getAllByTestId('chart')[0].getAttribute('data-points')!)
+    expect(points()).toHaveLength(4)
+    expect(points()[3].model3).toBe(2)
+    expect(points()[0].model3).toBeUndefined()
+    fireEvent.click(screen.getByText('Compare runs · 4 of 20 selected'))
+    const choices = screen.getAllByRole('checkbox')
+    fireEvent.click(choices[4]); fireEvent.click(choices[5])
+    expect(choices[6]).toBeDisabled()
+    fireEvent.click(choices[0])
+    expect(choices[6]).not.toBeDisabled()
+    fireEvent.click(choices[6])
+    expect(screen.getByText('Compare runs · 6 of 20 selected')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: 'Download CSV' })).toHaveLength(6)
+  })
   it('shows all diagnostics, missing values and a forecast download', () => {
     render(<ForecastDiagnostics jobs={[job('test-model',[row])]} />)
     expect(screen.getByRole('heading',{name:'Direction accuracy'})).toBeInTheDocument()

@@ -5,6 +5,7 @@ import { api } from './api'
 import type { ArchitectureSpec, GraphSpec, Catalog, EvaluationSpec, ExecutionSpec, Job } from './types'
 
 const dataColumns = ['Copper', 'FCX', 'CLP', 'SCCO']
+const batchSizes = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
 function clone<T>(value: T): T { return structuredClone(value) }
 
 export function evaluationFromPreset(catalog: Catalog, presetName: 'quick' | 'standard' | 'robust'): EvaluationSpec {
@@ -48,6 +49,7 @@ export function EvaluationPanel({
   onChange: (next: EvaluationSpec) => void
 }) {
   const loadPreset = (preset: EvaluationSpec['preset']) => onChange(evaluationFromPreset(catalog, preset))
+  const batchSizeOptions = [...new Set([...batchSizes, evaluation.batch_size])].sort((a, b) => a - b)
   return (
     <details className="evaluation-panel panel-surface">
       <summary><FlaskConical size={16} />Evaluation settings<span>{evaluation.preset}</span></summary>
@@ -61,7 +63,7 @@ export function EvaluationPanel({
         <label><span>Cells (window/horizon)</span><input value={evaluation.cells.map((cell) => `${cell.window}/${cell.horizon}`).join(', ')} onChange={(event) => onChange({ ...evaluation, cells: cellList(event.target.value) })} /></label>
         <label><span>Seeds</span><input value={evaluation.seeds.join(', ')} onChange={(event) => onChange({ ...evaluation, seeds: numberList(event.target.value) })} /></label>
         <label><span>Epochs</span><input type="number" value={evaluation.epochs} onChange={(event) => onChange({ ...evaluation, epochs: Number(event.target.value) })} /></label>
-        <label><span>Batch size</span><input type="number" value={evaluation.batch_size} onChange={(event) => onChange({ ...evaluation, batch_size: Number(event.target.value) })} /></label>
+        <label><span>Batch size</span><select value={evaluation.batch_size} onChange={(event) => onChange({ ...evaluation, batch_size: Number(event.target.value) })}>{batchSizeOptions.map((size) => <option key={size} value={size}>{size}</option>)}</select></label>
         <label><span>Learning rate</span><input type="number" step="0.0001" value={evaluation.learning_rate} onChange={(event) => onChange({ ...evaluation, learning_rate: Number(event.target.value) })} /></label>
         <label><span>Loss</span><select value={evaluation.loss} onChange={(event) => onChange({ ...evaluation, loss: event.target.value as EvaluationSpec['loss'] })}><option value="mse">MSE</option><option value="mae">MAE</option><option value="huber">Huber</option></select></label>
         <label><span>Patience</span><input type="number" value={evaluation.early_stopping_patience ?? ''} onChange={(event) => onChange({ ...evaluation, early_stopping_patience: event.target.value ? Number(event.target.value) : null })} /></label>

@@ -123,6 +123,24 @@ def test_final_test_is_locked_to_one_job_per_candidate(tmp_path: Path) -> None:
         raise AssertionError("duplicate final test was accepted")
 
 
+def test_final_timeout_override_keeps_science_and_test_once_guard(tmp_path, monkeypatch):
+    manager = JobManager(tmp_path / 'results', tmp_path)
+    monkeypatch.setattr('hypercast4d.playground.modal_capability', lambda: {'sdk_installed': True, 'authenticated': True})
+    parent = manager.submit_validation(_preset('residual-tcn'), {'preset':'robust','seeds':[101,211]},
+        {'target':'modal','gpu':'L4','timeout_seconds':1200})
+    status_path=manager.jobs_root/parent['id']/'status.json'
+    status=json.loads(status_path.read_text());status['state']='complete';status_path.write_text(json.dumps(status))
+    original=manager.get_job(parent['id'])['request']
+    with pytest.raises(ValueError): manager.submit_final_test(parent['id'], 0)
+    final=manager.submit_final_test(parent['id'],300)
+    request=manager.get_job(final['id'])['request']
+    assert request['execution']=={'target':'modal','gpu':'L4','timeout_seconds':300}
+    assert request['evaluation']==original['evaluation']
+    assert request['candidate_hash']==original['candidate_hash']
+    assert manager.get_job(parent['id'])['request']==original
+    with pytest.raises(ValueError,match='already has'):manager.submit_final_test(parent['id'],600)
+
+
 def test_playground_api_exposes_catalog_validation_and_saved_architectures(
     tmp_path: Path,
 ) -> None:
@@ -228,6 +246,25 @@ def test_worker_completes_a_real_validation_job(
     runs = pd.read_csv(job_dir / "runs.csv")
     assert list(runs["split"]) == ["validation"]
     assert np.isfinite(runs.loc[0, "mae_ratio"])
+
+
+def test_final_worker_records_paired_initialization_and_all_epochs_on_synthetic_data(tmp_path,monkeypatch):
+    data=tmp_path/'data/raw';data.mkdir(parents=True)
+    values=10+np.cumsum(np.random.default_rng(19).normal(0,.05,(140,4)),axis=0)
+    frame=pd.DataFrame(values,columns=['Copper','FCX','CLP','SCCO'])
+    frame.insert(0,'Date',pd.date_range('2020-01-01',periods=140));frame.to_excel(data/'paper_data.xlsx',index=False)
+    parent=tmp_path/'parent';parent.mkdir()
+    pd.DataFrame([{'window':10,'horizon':1,'epochs_ran':2}]*6).to_csv(parent/'runs.csv',index=False)
+    directory=tmp_path/'final';directory.mkdir()
+    payload={'phase':'final_test','parent_job_dir':str(parent),'architecture':_preset('tslib-dlinear'),
+        'evaluation':{'preset':'robust','cells':[{'window':10,'horizon':1}],'seeds':[101,211],
+        'epochs':150,'initialization':'matched-v1','device':'cpu'}}
+    (directory/'request.json').write_text(json.dumps(payload));monkeypatch.chdir(tmp_path)
+    run_job(directory)
+    assert json.loads((directory/'status.json').read_text())['state']=='complete'
+    rows=pd.read_csv(directory/'runs.csv');assert rows['epochs_ran'].tolist()==[2,2]
+    init=json.loads((directory/'initialization.json').read_text());assert len(init)==2 and all(x['fold']==0 for x in init)
+    curves=pd.read_csv(directory/'learning_curves.csv');assert len(curves)==4 and set(curves['seed'])=={101,211}
 
 
 def test_graph_api_migration_drafts_and_all_cell_validation(tmp_path):

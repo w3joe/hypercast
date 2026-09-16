@@ -75,3 +75,39 @@ class HyperDense(nn.Module):
             f"in_features={self.in_features}, out_features={self.out_features}, "
             f"algebra={self.algebra.name}, bias={self.bias is not None}"
         )
+
+
+class ShapePreservingHyperDense(nn.Module):
+    """Explicit last-axis zero-padding, HyperDense, and output cropping."""
+
+    def __init__(self, width: int, algebra: str | Algebra, bias: bool = True):
+        super().__init__()
+        self.width = width
+        algebra = get_algebra(algebra) if isinstance(algebra, str) else algebra
+        units = (width + algebra.component_count - 1) // algebra.component_count
+        self.hyper = HyperDense(units, units, algebra, bias)
+        self.padded_width = units * algebra.component_count
+
+    @property
+    def shape_fit(self) -> dict:
+        return dict(axis=-1, input_width=self.width, padded_width=self.padded_width,
+                    units=self.hyper.in_features, output_width=self.width,
+                    padding=self.padded_width - self.width, crop=self.padded_width - self.width)
+
+    @staticmethod
+    def validate_input(inputs):
+        if not isinstance(inputs, torch.Tensor) or inputs.ndim < 2 or not inputs.is_floating_point():
+            raise ValueError('HyperDense auto-fit requires a real floating-point tensor with batch and feature axes; '
+                             'tuples, scalars, indices and complex FFT tensors are unsupported at this connection')
+        if inputs.shape[-1] < 1:
+            raise ValueError('HyperDense auto-fit requires a nonempty last axis')
+
+    def forward(self, inputs):
+        self.validate_input(inputs)
+        if inputs.shape[-1] != self.width:
+            raise ValueError(f'HyperDense auto-fit was constructed for last-axis width {self.width}, '
+                             f'got {inputs.shape[-1]}; dynamic width changes require a different connection')
+        padded = torch.nn.functional.pad(inputs, (0, self.padded_width - self.width))
+        # Cropping leaves gaps in the padded strides. Downstream TSLib view()
+        # operations must be able to flatten/reshape the preserved dimensions.
+        return self.hyper(padded)[..., :self.width].contiguous()

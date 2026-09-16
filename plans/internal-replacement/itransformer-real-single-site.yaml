@@ -1,0 +1,938 @@
+schema_version: 2
+revision: source-graph-1-tslib-4e938a1767106324dd753b2a44832bf870a0252e
+name: iTransformer (TSLib core, editable) + Original
+sources:
+  s0:
+    schema_version: 1
+    name: iTransformer (TSLib core, editable) + Original
+    input:
+      representation: levels
+      feature_order:
+      - 0
+      - 1
+      - 2
+      - 3
+    layers:
+    - id: core
+      type: tslib_itransformer
+      params:
+        d_model: 32
+        dropout: 0.1
+        num_layers: 1
+        n_heads: 4
+    - id: flatten
+      type: flatten
+      params: {}
+    head:
+      type: direct
+      zero_initialize: false
+nodes:
+- id: inputs
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: inputs
+- id: getitem
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem
+- id: getitem_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_1
+- id: transpose
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: transpose
+  group: layer-core
+- id: pad
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: pad
+  group: layer-core
+- id: transpose_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: transpose_1
+  group: layer-core
+- id: zeros_like
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: zeros_like
+  group: layer-core
+- id: mean
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: mean
+  group: layer-core
+- id: detach
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: detach
+  group: layer-core
+- id: sub
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: sub
+  group: layer-core
+- id: var
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: var
+  group: layer-core
+- id: add
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: add
+  group: layer-core
+- id: sqrt
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: sqrt
+  group: layer-core
+- id: truediv
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: truediv
+  group: layer-core
+- id: getattr_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getattr_1
+  group: layer-core
+- id: getitem_2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_2
+  group: layer-core
+- id: getitem_3
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_3
+  group: layer-core
+- id: getitem_4
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_4
+  group: layer-core
+- id: permute
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: permute
+  group: layer-core
+- id: layers_0_model_enc_embedding_value_embedding
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_enc_embedding_value_embedding
+  module_ref: s0:layers.0.model.enc_embedding.value_embedding
+  group: layer-core
+- id: layers_0_model_enc_embedding_dropout
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_enc_embedding_dropout
+  module_ref: s0:layers.0.model.enc_embedding.dropout
+  group: layer-core
+- id: getattr_2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getattr_2
+  group: layer-core
+- id: getitem_5
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_5
+  group: layer-core
+- id: getitem_6
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_6
+  group: layer-core
+- id: getitem_7
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_7
+  group: layer-core
+- id: getattr_3
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getattr_3
+  group: layer-core
+- id: getitem_8
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_8
+  group: layer-core
+- id: getitem_9
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_9
+  group: layer-core
+- id: getitem_10
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_10
+  group: layer-core
+- id: layers_0_model_encoder_attn_layers_0_attention_query_projection
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_encoder_attn_layers_0_attention_query_projection
+  module_ref: s0:layers.0.model.encoder.attn_layers.0.attention.query_projection
+  group: layer-core
+- id: view
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: view
+  group: layer-core
+- id: layers_0_model_encoder_attn_layers_0_attention_key_projection
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_encoder_attn_layers_0_attention_key_projection
+  module_ref: s0:layers.0.model.encoder.attn_layers.0.attention.key_projection
+  group: layer-core
+- id: view_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: view_1
+  group: layer-core
+- id: layers_0_model_encoder_attn_layers_0_attention_value_projection
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_encoder_attn_layers_0_attention_value_projection
+  module_ref: s0:layers.0.model.encoder.attn_layers.0.attention.value_projection
+  group: layer-core
+- id: view_2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: view_2
+  group: layer-core
+- id: getattr_4
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getattr_4
+  group: layer-core
+- id: getitem_11
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_11
+  group: layer-core
+- id: getitem_12
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_12
+  group: layer-core
+- id: getitem_13
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_13
+  group: layer-core
+- id: getitem_14
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_14
+  group: layer-core
+- id: getattr_5
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getattr_5
+  group: layer-core
+- id: getitem_15
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_15
+  group: layer-core
+- id: getitem_16
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_16
+  group: layer-core
+- id: getitem_17
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_17
+  group: layer-core
+- id: getitem_18
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_18
+  group: layer-core
+- id: sqrt_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: sqrt_1
+  group: layer-core
+- id: truediv_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: truediv_1
+  group: layer-core
+- id: einsum
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: einsum
+  group: layer-core
+- id: mul
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: mul
+  group: layer-core
+- id: softmax
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: softmax
+  group: layer-core
+- id: layers_0_model_encoder_attn_layers_0_attention_inner_attention_dropout
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_encoder_attn_layers_0_attention_inner_attention_dropout
+  module_ref: s0:layers.0.model.encoder.attn_layers.0.attention.inner_attention.dropout
+  group: layer-core
+- id: einsum_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: einsum_1
+  group: layer-core
+- id: contiguous
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: contiguous
+  group: layer-core
+- id: view_3
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: view_3
+  group: layer-core
+- id: layers_0_model_encoder_attn_layers_0_attention_out_projection
+  kind: dense
+  params:
+    units: 32
+    bias: true
+  group: layer-core
+- id: layers_0_model_encoder_attn_layers_0_dropout
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_encoder_attn_layers_0_dropout
+  module_ref: s0:layers.0.model.encoder.attn_layers.0.dropout
+  group: layer-core
+- id: add_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: add_1
+  group: layer-core
+- id: layers_0_model_encoder_attn_layers_0_norm1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_encoder_attn_layers_0_norm1
+  module_ref: s0:layers.0.model.encoder.attn_layers.0.norm1
+  group: layer-core
+- id: transpose_2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: transpose_2
+  group: layer-core
+- id: layers_0_model_encoder_attn_layers_0_conv1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_encoder_attn_layers_0_conv1
+  module_ref: s0:layers.0.model.encoder.attn_layers.0.conv1
+  group: layer-core
+- id: gelu
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: gelu
+  group: layer-core
+- id: layers_0_model_encoder_attn_layers_0_dropout_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_encoder_attn_layers_0_dropout_1
+  module_ref: s0:layers.0.model.encoder.attn_layers.0.dropout
+  group: layer-core
+- id: layers_0_model_encoder_attn_layers_0_conv2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_encoder_attn_layers_0_conv2
+  module_ref: s0:layers.0.model.encoder.attn_layers.0.conv2
+  group: layer-core
+- id: transpose_3
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: transpose_3
+  group: layer-core
+- id: layers_0_model_encoder_attn_layers_0_dropout_2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_encoder_attn_layers_0_dropout_2
+  module_ref: s0:layers.0.model.encoder.attn_layers.0.dropout
+  group: layer-core
+- id: add_2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: add_2
+  group: layer-core
+- id: layers_0_model_encoder_attn_layers_0_norm2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_encoder_attn_layers_0_norm2
+  module_ref: s0:layers.0.model.encoder.attn_layers.0.norm2
+  group: layer-core
+- id: layers_0_model_encoder_norm
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_encoder_norm
+  module_ref: s0:layers.0.model.encoder.norm
+  group: layer-core
+- id: layers_0_model_projection
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_projection
+  module_ref: s0:layers.0.model.projection
+  group: layer-core
+- id: permute_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: permute_1
+  group: layer-core
+- id: getitem_19
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_19
+  group: layer-core
+- id: getitem_20
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_20
+  group: layer-core
+- id: unsqueeze
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: unsqueeze
+  group: layer-core
+- id: repeat
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: repeat
+  group: layer-core
+- id: mul_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: mul_1
+  group: layer-core
+- id: getitem_21
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_21
+  group: layer-core
+- id: unsqueeze_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: unsqueeze_1
+  group: layer-core
+- id: repeat_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: repeat_1
+  group: layer-core
+- id: add_3
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: add_3
+  group: layer-core
+- id: getitem_22
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_22
+  group: layer-core
+- id: getitem_23
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_23
+  group: layer-core
+- id: flatten
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: flatten
+  group: layer-flatten
+- id: output
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: output
+  module_ref: s0:output
+- id: output_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: output_1
+edges:
+- source: inputs
+  target: getitem
+  port: args/0
+- source: inputs
+  target: getitem_1
+  port: args/0
+- source: getitem_1
+  target: transpose
+  port: args/0
+- source: transpose
+  target: pad
+  port: args/0
+- source: pad
+  target: transpose_1
+  port: args/0
+- source: transpose_1
+  target: zeros_like
+  port: args/0
+- source: transpose_1
+  target: mean
+  port: args/0
+- source: mean
+  target: detach
+  port: args/0
+- source: transpose_1
+  target: sub
+  port: args/0
+- source: detach
+  target: sub
+  port: args/1
+- source: sub
+  target: var
+  port: args/0
+- source: var
+  target: add
+  port: args/0
+- source: add
+  target: sqrt
+  port: args/0
+- source: sub
+  target: truediv
+  port: args/0
+- source: sqrt
+  target: truediv
+  port: args/1
+- source: truediv
+  target: getattr_1
+  port: args/0
+- source: getattr_1
+  target: getitem_2
+  port: args/0
+- source: getattr_1
+  target: getitem_3
+  port: args/0
+- source: getattr_1
+  target: getitem_4
+  port: args/0
+- source: truediv
+  target: permute
+  port: args/0
+- source: permute
+  target: layers_0_model_enc_embedding_value_embedding
+  port: args/0
+- source: layers_0_model_enc_embedding_value_embedding
+  target: layers_0_model_enc_embedding_dropout
+  port: args/0
+- source: layers_0_model_enc_embedding_dropout
+  target: getattr_2
+  port: args/0
+- source: getattr_2
+  target: getitem_5
+  port: args/0
+- source: getattr_2
+  target: getitem_6
+  port: args/0
+- source: getattr_2
+  target: getitem_7
+  port: args/0
+- source: layers_0_model_enc_embedding_dropout
+  target: getattr_3
+  port: args/0
+- source: getattr_3
+  target: getitem_8
+  port: args/0
+- source: getattr_3
+  target: getitem_9
+  port: args/0
+- source: getattr_3
+  target: getitem_10
+  port: args/0
+- source: layers_0_model_enc_embedding_dropout
+  target: layers_0_model_encoder_attn_layers_0_attention_query_projection
+  port: args/0
+- source: layers_0_model_encoder_attn_layers_0_attention_query_projection
+  target: view
+  port: args/0
+- source: getitem_5
+  target: view
+  port: args/1
+- source: getitem_6
+  target: view
+  port: args/2
+- source: layers_0_model_enc_embedding_dropout
+  target: layers_0_model_encoder_attn_layers_0_attention_key_projection
+  port: args/0
+- source: layers_0_model_encoder_attn_layers_0_attention_key_projection
+  target: view_1
+  port: args/0
+- source: getitem_5
+  target: view_1
+  port: args/1
+- source: getitem_9
+  target: view_1
+  port: args/2
+- source: layers_0_model_enc_embedding_dropout
+  target: layers_0_model_encoder_attn_layers_0_attention_value_projection
+  port: args/0
+- source: layers_0_model_encoder_attn_layers_0_attention_value_projection
+  target: view_2
+  port: args/0
+- source: getitem_5
+  target: view_2
+  port: args/1
+- source: getitem_9
+  target: view_2
+  port: args/2
+- source: view
+  target: getattr_4
+  port: args/0
+- source: getattr_4
+  target: getitem_11
+  port: args/0
+- source: getattr_4
+  target: getitem_12
+  port: args/0
+- source: getattr_4
+  target: getitem_13
+  port: args/0
+- source: getattr_4
+  target: getitem_14
+  port: args/0
+- source: view_2
+  target: getattr_5
+  port: args/0
+- source: getattr_5
+  target: getitem_15
+  port: args/0
+- source: getattr_5
+  target: getitem_16
+  port: args/0
+- source: getattr_5
+  target: getitem_17
+  port: args/0
+- source: getattr_5
+  target: getitem_18
+  port: args/0
+- source: getitem_14
+  target: sqrt_1
+  port: args/0
+- source: sqrt_1
+  target: truediv_1
+  port: args/1
+- source: view
+  target: einsum
+  port: args/1
+- source: view_1
+  target: einsum
+  port: args/2
+- source: truediv_1
+  target: mul
+  port: args/0
+- source: einsum
+  target: mul
+  port: args/1
+- source: mul
+  target: softmax
+  port: args/0
+- source: softmax
+  target: layers_0_model_encoder_attn_layers_0_attention_inner_attention_dropout
+  port: args/0
+- source: layers_0_model_encoder_attn_layers_0_attention_inner_attention_dropout
+  target: einsum_1
+  port: args/1
+- source: view_2
+  target: einsum_1
+  port: args/2
+- source: einsum_1
+  target: contiguous
+  port: args/0
+- source: contiguous
+  target: view_3
+  port: args/0
+- source: getitem_5
+  target: view_3
+  port: args/1
+- source: getitem_6
+  target: view_3
+  port: args/2
+- source: view_3
+  target: layers_0_model_encoder_attn_layers_0_attention_out_projection
+  port: x
+- source: layers_0_model_encoder_attn_layers_0_attention_out_projection
+  target: layers_0_model_encoder_attn_layers_0_dropout
+  port: args/0
+- source: layers_0_model_enc_embedding_dropout
+  target: add_1
+  port: args/0
+- source: layers_0_model_encoder_attn_layers_0_dropout
+  target: add_1
+  port: args/1
+- source: add_1
+  target: layers_0_model_encoder_attn_layers_0_norm1
+  port: args/0
+- source: layers_0_model_encoder_attn_layers_0_norm1
+  target: transpose_2
+  port: args/0
+- source: transpose_2
+  target: layers_0_model_encoder_attn_layers_0_conv1
+  port: args/0
+- source: layers_0_model_encoder_attn_layers_0_conv1
+  target: gelu
+  port: args/0
+- source: gelu
+  target: layers_0_model_encoder_attn_layers_0_dropout_1
+  port: args/0
+- source: layers_0_model_encoder_attn_layers_0_dropout_1
+  target: layers_0_model_encoder_attn_layers_0_conv2
+  port: args/0
+- source: layers_0_model_encoder_attn_layers_0_conv2
+  target: transpose_3
+  port: args/0
+- source: transpose_3
+  target: layers_0_model_encoder_attn_layers_0_dropout_2
+  port: args/0
+- source: layers_0_model_encoder_attn_layers_0_norm1
+  target: add_2
+  port: args/0
+- source: layers_0_model_encoder_attn_layers_0_dropout_2
+  target: add_2
+  port: args/1
+- source: add_2
+  target: layers_0_model_encoder_attn_layers_0_norm2
+  port: args/0
+- source: layers_0_model_encoder_attn_layers_0_norm2
+  target: layers_0_model_encoder_norm
+  port: args/0
+- source: layers_0_model_encoder_norm
+  target: layers_0_model_projection
+  port: args/0
+- source: layers_0_model_projection
+  target: permute_1
+  port: args/0
+- source: permute_1
+  target: getitem_19
+  port: args/0
+- source: getitem_4
+  target: getitem_19
+  port: args/1/2/stop
+- source: sqrt
+  target: getitem_20
+  port: args/0
+- source: getitem_20
+  target: unsqueeze
+  port: args/0
+- source: unsqueeze
+  target: repeat
+  port: args/0
+- source: getitem_19
+  target: mul_1
+  port: args/0
+- source: repeat
+  target: mul_1
+  port: args/1
+- source: detach
+  target: getitem_21
+  port: args/0
+- source: getitem_21
+  target: unsqueeze_1
+  port: args/0
+- source: unsqueeze_1
+  target: repeat_1
+  port: args/0
+- source: mul_1
+  target: add_3
+  port: args/0
+- source: repeat_1
+  target: add_3
+  port: args/1
+- source: add_3
+  target: getitem_22
+  port: args/0
+- source: getitem_22
+  target: getitem_23
+  port: args/0
+- source: getitem_23
+  target: flatten
+  port: args/0
+- source: flatten
+  target: output
+  port: args/0
+- source: output
+  target: output_1
+  port: args/0
+groups:
+- id: layer-core
+  label: itransformer
+- id: layer-flatten
+  label: flatten
+output: output_1
+locked: false

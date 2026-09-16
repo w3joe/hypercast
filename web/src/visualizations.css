@@ -1,0 +1,38 @@
+.performance-heatmap, .forecast-replay, .weight-inspector { margin-bottom: 24px; }
+.viz-caption { color: #63747c; font-size: 12px; line-height: 1.65; }
+.heatmap-scroll { overflow: auto; max-height: 520px; }
+.heatmap-scroll table { width: 100%; border-collapse: separate; border-spacing: 5px; font-size: 14px; }
+.heatmap-scroll th { text-align: left; font-weight: 550; min-width: 112px; padding: 8px; background: white; }
+.heatmap-scroll thead th { position: sticky; top: 0; z-index: 2; }
+.heatmap-scroll tbody th { position: sticky; left: 0; min-width: 200px; max-width: 260px; z-index: 1; }
+.heatmap-scroll small { display: block; font-size: 12px; font-weight: 400; margin-top: 6px; }
+.heatmap-scroll td { padding: 0; border: 0; min-width: 112px; }
+.heatmap-scroll td button, .heatmap-missing { display: block; width: 100%; min-height: 66px; border: 0; border-radius: 7px; text-align: center; padding: 10px 14px; font-size: 18px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.heatmap-scroll td button { cursor: pointer; transition: box-shadow .15s, transform .15s; }
+.heatmap-scroll td button:hover { box-shadow: inset 0 0 0 2px #6b3eda; transform: translateY(-1px); }
+.heatmap-scroll td button:focus-visible { outline: 3px solid #6b3eda; outline-offset: 1px; }
+.heatmap-missing { background: repeating-linear-gradient(135deg, #f4f6f8, #f4f6f8 5px, #eaf0f3 5px, #eaf0f3 6px); color: #63747c; }
+.forecast-replay { border-top: 3px solid #6b3eda !important; }
+.replay-readout, .weight-stats { display: flex; gap: 18px 30px; flex-wrap: wrap; padding: 16px 0; border-top: 1px solid #e4e9ed; border-bottom: 1px solid #e4e9ed; margin-bottom: 18px; font-size: 16px; font-variant-numeric: tabular-nums; }
+.replay-readout small, .weight-stats small { display: block; font-size: 12px; color: #687a87; margin-bottom: 7px; }
+.replay-chart h4, .weight-layout h4 { font-size: 14px; font-weight: 550; margin: 12px 0; }
+.replay-controls { display: flex; gap: 8px; margin-top: 16px; }
+.replay-controls button { display: inline-flex; align-items: center; justify-content: center; border: 1px solid #dce4e6; border-radius: 8px; background: white; width: 40px; height: 40px; color: #6b3eda; cursor: pointer; }
+.replay-controls button:disabled { opacity: .4; cursor: default; }
+.sidebar-section input[type=range] { width: 100%; accent-color: #6b3eda; padding: 12px 0; }
+.weights-disclosure { margin-bottom: 24px; }
+.weights-disclosure > summary { padding: 15px 0; font-size: 16px; cursor: pointer; }
+.weight-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.weight-close { width: 38px; height: 38px; border: 1px solid #dce4e6; border-radius: 8px; background: white; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.weight-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 32px; }
+.weight-components { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.weight-components figure { margin: 0; padding: 10px; background: #f6f8fc; border: 1px solid #e2e8f0; border-radius: 8px; }
+.weight-components figcaption { text-align: center; padding-top: 10px; font-size: 13px; color: #425972; }
+.weight-matrix { display: block; width: 100%; max-height: 440px; background: #f7f9fb; shape-rendering: crispEdges; }
+.weight-components .weight-matrix { max-height: 155px; }
+.weight-color-scale { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 22px auto 12px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.weight-color-scale i { display: block; width: min(260px, 40%); height: 9px; border-radius: 4px; background: linear-gradient(90deg, hsl(191 72% 42%), hsl(191 72% 97%), hsl(257 72% 42%)); }
+.canvas-weight-overlay { position: absolute; inset: 0; z-index: 12; overflow: auto; padding: 26px; background: #f5f7fb; }
+.canvas-weight-overlay .weight-inspector { padding: 24px; min-height: calc(100% - 24px); }
+.weight-inspector [role=alert], .forecast-replay [role=alert] { color: #8b482d; background: #fff6ed; border: 1px solid #efddcb; padding: 18px; border-radius: 8px; font-size: 14px; line-height: 1.6; }
+@media (max-width: 900px) { .weight-layout { grid-template-columns: minmax(0, 1fr); } .canvas-weight-overlay { padding: 12px; } .canvas-weight-overlay .weight-inspector { padding: 16px; } .heatmap-scroll tbody th { min-width: 145px; max-width: 160px; } }

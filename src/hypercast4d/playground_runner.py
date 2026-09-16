@@ -25,7 +25,8 @@ from .diagnostics import (
     training_references,
 )
 from .models import parameter_count
-from .training import error_metrics, fit_model, predict, seed_everything
+from .training import benchmark_inference, error_metrics, fit_model, predict, seed_everything
+from .experiment_controls import initialize_for_evaluation, numerical_preflight
 
 
 EVALUATION_PRESETS: dict[str, dict[str, Any]] = {
@@ -169,7 +170,7 @@ def normalize_evaluation(raw: dict[str, Any] | None) -> dict[str, Any]:
     )
     if minimum_delta < 0:
         raise ValueError("early_stopping_min_delta must not be negative")
-    return {
+    result = {
         "protocol": protocol,
         "preset": preset_name,
         "data_path": data_path,
@@ -218,6 +219,49 @@ def normalize_evaluation(raw: dict[str, Any] | None) -> dict[str, Any]:
         "device": device,
         "folds": preset["folds"],
     }
+    # Omit new options when absent so historical job hashes remain valid.
+    if "initialization" in raw:
+        if raw["initialization"] not in {"legacy", "matched-v1", "internal-matched-v1", "remaining-internal-v1"}:
+            raise ValueError("Unsupported initialization protocol")
+        result["initialization"] = raw["initialization"]
+    for key in ("benchmark", "numerical_preflight", "internal_preflight", "remaining_preflight", "remaining_tuning", "nested_stopping"):
+        if key in raw:
+            if not isinstance(raw[key], bool):
+                raise ValueError(f"{key} must be boolean")
+            result[key] = raw[key]
+    if "early_stopping_relative_delta" in raw:
+        value = float(raw['early_stopping_relative_delta'])
+        if not 0 <= value < 1:
+            raise ValueError('early_stopping_relative_delta must be in [0, 1)')
+        result['early_stopping_relative_delta'] = value
+    if 'replacement' in raw:
+        from .remaining_controls import normalize_replacement
+        if result.get('initialization') != 'remaining-internal-v1':
+            raise ValueError('replacement requires remaining-internal-v1 initialization')
+        result['replacement'] = normalize_replacement(raw['replacement'])
+    if result.get('initialization') == 'remaining-internal-v1':
+        if 'replacement' not in result or not result.get('nested_stopping') or not result['restore_best_weights']:
+            raise ValueError('Remaining-model protocol requires replacement, nested stopping and restored weights')
+        if any(c['window'] != 32 for c in cells):
+            raise ValueError('Remaining-model protocol currently requires context 32')
+    if result.get('remaining_preflight') and result.get('initialization') != 'remaining-internal-v1':
+        raise ValueError('remaining_preflight requires remaining-internal-v1')
+    if result.get('remaining_tuning'):
+        if (result.get('initialization') != 'remaining-internal-v1'
+                or result['replacement']['variant'] != 'native' or result.get('remaining_preflight')
+                or len(cells) != 1 or len(seeds) != 1 or len(result['folds']) != 1):
+            raise ValueError('remaining_tuning requires remaining-internal-v1, a native template, one cell/seed/fold and prior GPU gates')
+    if 'remaining_replication' in raw:
+        from .remaining_controls import VARIANTS
+        rates = raw['remaining_replication']
+        if (result.get('initialization') != 'remaining-internal-v1'
+                or result['replacement']['variant'] != 'native' or result.get('remaining_preflight')
+                or result.get('remaining_tuning') or len(cells) != 1 or len(result['folds']) != 1
+                or not isinstance(rates, dict) or set(rates) != set(VARIANTS)
+                or any(value not in (.0003, .001) for value in rates.values())):
+            raise ValueError('remaining_replication requires an exact eight-arm frozen rate map, a native template, one cell/fold, and no tuning or preflight')
+        result['remaining_replication'] = {key: float(rates[key]) for key in VARIANTS}
+    return result
 
 
 def resolve_device(name: str) -> torch.device:
@@ -344,19 +388,45 @@ def _fit_kwargs(evaluation: dict[str, Any], device: torch.device) -> dict[str, A
         "loss_name": evaluation["loss"],
         "shuffle": evaluation["shuffle"],
         "early_stopping_min_delta": evaluation["early_stopping_min_delta"],
+        **({'early_stopping_relative_delta': evaluation['early_stopping_relative_delta']}
+           if 'early_stopping_relative_delta' in evaluation else {}),
         "device": device,
     }
 
 
 def run_validation(job_dir: Path, request: dict[str, Any]) -> None:
+    evaluation = normalize_evaluation(request.get('evaluation'))
+    if evaluation.get('remaining_tuning') or evaluation.get('remaining_replication'):
+        from .remaining_batch import run_batch
+        return run_batch(job_dir, request)
+    if evaluation.get('initialization') == 'remaining-internal-v1':
+        from .remaining_controls import precision_context
+        with precision_context(evaluation['replacement']['backbone']):
+            return _run_validation(job_dir, request)
+    return _run_validation(job_dir, request)
+
+
+def _run_validation(job_dir: Path, request: dict[str, Any]) -> None:
     architecture = normalize_architecture_spec(request["architecture"])
     evaluation = normalize_evaluation(request.get("evaluation"))
     frame = load_paper_data(evaluation["data_path"], evaluation["target_column"])
     device = resolve_device(evaluation["device"])
+    if evaluation.get("numerical_preflight"):
+        _atomic_json(job_dir / "preflight.json", numerical_preflight(device))
+    if evaluation.get('internal_preflight'):
+        from .internal_controls import preflight
+        _atomic_json(job_dir / 'preflight.json', preflight(device))
+    if evaluation.get('remaining_preflight'):
+        from .remaining_controls import preflight
+        _atomic_json(job_dir / 'preflight.json', preflight(evaluation['replacement']['backbone'], device))
     total = len(evaluation["cells"]) * len(evaluation["seeds"]) * len(evaluation["folds"])
     rows: list[dict[str, Any]] = []
+    initializations: list[dict[str, Any]] = []
+    split_audits: list[dict[str, Any]] = []
+    curves: list[dict[str, Any]] = []
     lead_rows: list[dict[str, Any]] = []
     initialize_diagnostics(job_dir)
+    _atomic_json(job_dir / 'weights.json', {})
     _status(job_dir, state="running", completed=0, total=total, phase="validation")
     print(
         f"Validation started: {architecture['name']} · {total} fitted runs",
@@ -372,6 +442,13 @@ def run_validation(job_dir: Path, request: dict[str, Any]) -> None:
                 fold["train_fraction"],
                 fold["validation_fraction"],
             )
+            stopping = prepared.validation
+            if evaluation.get('nested_stopping'):
+                from .internal_controls import nested_windows
+                prepared, stopping, audit = nested_windows(frame, window, horizon,
+                    fold['train_fraction'], fold['validation_fraction'])
+                split_audits.append(dict(window=window, horizon=horizon, fold=fold_index, **audit))
+                _atomic_json(job_dir / 'split_audit.json', split_audits)
             references = training_references(frame.iloc[:prepared.train_end, 0].to_numpy(), horizon)
             for seed in evaluation["seeds"]:
                 print(
@@ -380,10 +457,24 @@ def run_validation(job_dir: Path, request: dict[str, Any]) -> None:
                 )
                 seed_everything(seed)
                 model = build_architecture(architecture, window, horizon)
+                init_report = initialize_for_evaluation(model, architecture, evaluation,
+                    seed=seed, window=window, horizon=horizon, fold=fold_index)
+                if init_report:
+                    initializations.append(init_report)
+                    _atomic_json(job_dir / "initialization.json", initializations)
 
                 def report_epoch(
                     epoch: int, train_loss: float, validation_loss: float
                 ) -> None:
+                    curves.append(dict(window=window, horizon=horizon, seed=seed, fold=fold_index,
+                        epoch=epoch, train_loss=train_loss, validation_loss=validation_loss))
+                    if epoch == 1 or epoch % 5 == 0:
+                        _atomic_csv(job_dir / "learning_curves.csv", curves)
+                    if request.get('_deadline_monotonic') is not None:
+                        import time
+                        if time.monotonic() >= request['_deadline_monotonic']:
+                            _atomic_csv(job_dir / 'learning_curves.csv', curves)
+                            raise TimeoutError('Batch soft deadline reached; returning complete and partial fit artifacts')
                     _status(
                         job_dir,
                         current={
@@ -407,7 +498,7 @@ def run_validation(job_dir: Path, request: dict[str, Any]) -> None:
                 fitted = fit_model(
                     model,
                     prepared.train.as_dataset(),
-                    prepared.validation.as_dataset(),
+                    stopping.as_dataset(),
                     seed=seed,
                     epochs=evaluation["epochs"],
                     early_stopping_patience=evaluation["early_stopping_patience"],
@@ -415,6 +506,9 @@ def run_validation(job_dir: Path, request: dict[str, Any]) -> None:
                     epoch_callback=report_epoch,
                     **_fit_kwargs(evaluation, device),
                 )
+                _atomic_csv(job_dir / "learning_curves.csv", curves)
+                performance = (benchmark_inference(model, prepared.validation.as_dataset().tensors[0], device)
+                               if evaluation.get("benchmark") else {})
                 prediction_scaled = predict(
                     model,
                     prepared.validation.as_dataset(),
@@ -442,7 +536,11 @@ def run_validation(job_dir: Path, request: dict[str, Any]) -> None:
                     {
                         "parameters": parameter_count(model),
                         "train_seconds": fitted.train_seconds,
+                        "peak_gpu_allocated_mb": fitted.peak_gpu_allocated_mb,
+                        **performance,
                         "epochs_ran": fitted.epochs_ran,
+                        "best_epoch": fitted.best_epoch,
+                        "stopping_split": 'inner' if evaluation.get('nested_stopping') else 'outer',
                         "best_validation_loss_scaled": fitted.best_validation_loss,
                         "train_samples": len(prepared.train.x),
                         "validation_samples": len(prepared.validation.x),
@@ -452,6 +550,8 @@ def run_validation(job_dir: Path, request: dict[str, Any]) -> None:
                     job_dir, prediction, target, frame, prepared.validation.target_start, references,
                     window=window, horizon=horizon, seed=seed, fold=fold_index, split="validation",
                 )
+                from .visualizations import save_weights
+                save_weights(job_dir, model, window=window, horizon=horizon, seed=seed, fold=fold_index, split='validation')
                 rows.append(row)
                 lead_rows.extend(leads)
                 _atomic_csv(job_dir / "runs.csv", rows)
@@ -504,6 +604,8 @@ def _final_datasets(
 def run_final_test(job_dir: Path, request: dict[str, Any]) -> None:
     architecture = normalize_architecture_spec(request["architecture"])
     evaluation = normalize_evaluation(request.get("evaluation"))
+    if evaluation.get('initialization') == 'internal-matched-v1' or evaluation.get('nested_stopping'):
+        raise ValueError('Internal study requires a separately frozen independent-data final protocol; historical tail is already seen')
     parent_dir = Path(request["parent_job_dir"])
     parent_runs = pd.read_csv(parent_dir / "runs.csv")
     frame = load_paper_data(evaluation["data_path"], evaluation["target_column"])
@@ -511,7 +613,10 @@ def run_final_test(job_dir: Path, request: dict[str, Any]) -> None:
     total = len(evaluation["cells"]) * len(evaluation["seeds"])
     rows: list[dict[str, Any]] = []
     lead_rows: list[dict[str, Any]] = []
+    curves: list[dict[str, Any]] = []
+    initializations: list[dict[str, Any]] = []
     initialize_diagnostics(job_dir)
+    _atomic_json(job_dir / 'weights.json', {})
     _status(job_dir, state="running", completed=0, total=total, phase="final_test")
     print(
         f"Final test started: {architecture['name']} · {total} fitted runs",
@@ -539,10 +644,17 @@ def run_final_test(job_dir: Path, request: dict[str, Any]) -> None:
             )
             seed_everything(seed)
             model = build_architecture(architecture, window, horizon)
+            initializations.append(initialize_for_evaluation(model, architecture, evaluation,
+                seed=seed, window=window, horizon=horizon, fold=0))
+            _atomic_json(job_dir / "initialization.json", initializations)
 
             def report_epoch(
                 epoch: int, train_loss: float, validation_loss: float
             ) -> None:
+                curves.append(dict(window=window, horizon=horizon, seed=seed, fold=0,
+                    epoch=epoch, train_loss=train_loss, validation_loss=validation_loss))
+                if epoch % 5 == 0 or epoch == selected_epochs:
+                    _atomic_csv(job_dir / "learning_curves.csv", curves)
                 _status(
                     job_dir,
                     current={
@@ -568,6 +680,8 @@ def run_final_test(job_dir: Path, request: dict[str, Any]) -> None:
                 epoch_callback=report_epoch,
                 **_fit_kwargs(evaluation, device),
             )
+            performance = (benchmark_inference(model, train.tensors[0], device)
+                           if evaluation.get("benchmark") else {})
             prediction_scaled = predict(
                 model, test, device, evaluation["evaluation_batch_size"]
             )
@@ -592,6 +706,8 @@ def run_final_test(job_dir: Path, request: dict[str, Any]) -> None:
                 {
                     "parameters": parameter_count(model),
                     "train_seconds": fitted.train_seconds,
+                    "peak_gpu_allocated_mb": fitted.peak_gpu_allocated_mb,
+                    **performance,
                     "epochs_ran": selected_epochs,
                     "best_validation_loss_scaled": None,
                     "train_samples": len(train),
@@ -602,6 +718,8 @@ def run_final_test(job_dir: Path, request: dict[str, Any]) -> None:
                 job_dir, prediction, target, frame, target_start, references,
                 window=window, horizon=horizon, seed=seed, fold=0, split="test",
             )
+            from .visualizations import save_weights
+            save_weights(job_dir, model, window=window, horizon=horizon, seed=seed, fold=0, split='test')
             rows.append(row)
             lead_rows.extend(leads)
             _atomic_csv(job_dir / "runs.csv", rows)

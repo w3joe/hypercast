@@ -1,0 +1,310 @@
+schema_version: 2
+revision: source-graph-1-tslib-4e938a1767106324dd753b2a44832bf870a0252e
+name: DLinear (TSLib core, editable) + Original
+sources:
+  s0:
+    schema_version: 1
+    name: DLinear (TSLib core, editable) + Original
+    input:
+      representation: levels
+      feature_order:
+      - 0
+      - 1
+      - 2
+      - 3
+    layers:
+    - id: core
+      type: tslib_dlinear
+      params: {}
+    - id: flatten
+      type: flatten
+      params: {}
+    head:
+      type: direct
+      zero_initialize: false
+nodes:
+- id: inputs
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: inputs
+- id: getitem
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem
+- id: getitem_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_1
+- id: transpose
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: transpose
+  group: layer-core
+- id: pad
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: pad
+  group: layer-core
+- id: transpose_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: transpose_1
+  group: layer-core
+- id: zeros_like
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: zeros_like
+  group: layer-core
+- id: getitem_2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_2
+  group: layer-core
+- id: repeat
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: repeat
+  group: layer-core
+- id: getitem_3
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_3
+  group: layer-core
+- id: repeat_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: repeat_1
+  group: layer-core
+- id: cat
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: cat
+  group: layer-core
+- id: permute
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: permute
+  group: layer-core
+- id: layers_0_model_decompsition_moving_avg_avg
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_decompsition_moving_avg_avg
+  module_ref: s0:layers.0.model.decompsition.moving_avg.avg
+  group: layer-core
+- id: permute_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: permute_1
+  group: layer-core
+- id: sub
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: sub
+  group: layer-core
+- id: permute_2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: permute_2
+  group: layer-core
+- id: permute_3
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: permute_3
+  group: layer-core
+- id: layers_0_model_linear_seasonal
+  kind: hyper_dense
+  params:
+    units: 16
+    bias: true
+    algebra: complex
+  group: layer-core
+- id: layers_0_model_linear_trend
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_linear_trend
+  module_ref: s0:layers.0.model.Linear_Trend
+  group: layer-core
+- id: add
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: add
+  group: layer-core
+- id: permute_4
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: permute_4
+  group: layer-core
+- id: getitem_4
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_4
+  group: layer-core
+- id: getitem_5
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_5
+  group: layer-core
+- id: flatten
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: flatten
+  group: layer-flatten
+- id: output
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: output
+  module_ref: s0:output
+- id: output_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: output_1
+edges:
+- source: inputs
+  target: getitem
+  port: args/0
+- source: inputs
+  target: getitem_1
+  port: args/0
+- source: getitem_1
+  target: transpose
+  port: args/0
+- source: transpose
+  target: pad
+  port: args/0
+- source: pad
+  target: transpose_1
+  port: args/0
+- source: transpose_1
+  target: zeros_like
+  port: args/0
+- source: transpose_1
+  target: getitem_2
+  port: args/0
+- source: getitem_2
+  target: repeat
+  port: args/0
+- source: transpose_1
+  target: getitem_3
+  port: args/0
+- source: getitem_3
+  target: repeat_1
+  port: args/0
+- source: repeat
+  target: cat
+  port: args/0/0
+- source: transpose_1
+  target: cat
+  port: args/0/1
+- source: repeat_1
+  target: cat
+  port: args/0/2
+- source: cat
+  target: permute
+  port: args/0
+- source: permute
+  target: layers_0_model_decompsition_moving_avg_avg
+  port: args/0
+- source: layers_0_model_decompsition_moving_avg_avg
+  target: permute_1
+  port: args/0
+- source: transpose_1
+  target: sub
+  port: args/0
+- source: permute_1
+  target: sub
+  port: args/1
+- source: sub
+  target: permute_2
+  port: args/0
+- source: permute_1
+  target: permute_3
+  port: args/0
+- source: permute_2
+  target: layers_0_model_linear_seasonal
+  port: x
+- source: permute_3
+  target: layers_0_model_linear_trend
+  port: args/0
+- source: layers_0_model_linear_seasonal
+  target: add
+  port: args/0
+- source: layers_0_model_linear_trend
+  target: add
+  port: args/1
+- source: add
+  target: permute_4
+  port: args/0
+- source: permute_4
+  target: getitem_4
+  port: args/0
+- source: getitem_4
+  target: getitem_5
+  port: args/0
+- source: getitem_5
+  target: flatten
+  port: args/0
+- source: flatten
+  target: output
+  port: args/0
+- source: output
+  target: output_1
+  port: args/0
+groups:
+- id: layer-core
+  label: dlinear
+- id: layer-flatten
+  label: flatten
+output: output_1
+locked: false

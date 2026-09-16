@@ -1,4 +1,4 @@
-"""HyperCast4D: leakage-safe checks for 4D hypercomplex forecasting."""
+"""Hypercast: leakage-safe checks for 4D hypercomplex forecasting."""
 
 from .algebras import ALGEBRAS, COMPONENT_COUNT, PAPER_COMPONENT_COUNT, Algebra, get_algebra
 from .architecture import ArchitectureError, build_architecture, validate_architecture

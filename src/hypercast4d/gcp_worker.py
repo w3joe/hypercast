@@ -31,6 +31,11 @@ def merge_trials(job_dir: Path, directories: list[Path]) -> None:
         if filename == "runs.csv":
             rows = json.loads(combined.to_json(orient="records"))
     summary = _summary(rows)
+    weights = {}
+    for path in directories:
+        if (path / 'weights.json').is_file():
+            weights.update(json.loads((path / 'weights.json').read_text()))
+    _atomic_json(job_dir / 'weights.json', weights)
     _atomic_json(job_dir / "summary.json", summary)
     _atomic_csv(job_dir / "summary.csv", summary)
     _status(job_dir, state="complete", completed=len(rows), total=len(rows), current=None)
@@ -47,6 +52,7 @@ def run_gpu_trials(job_dir: Path, gpu_count: int, shard_index: int = 0, shard_co
         for filename in ("runs.csv", "per_lead.csv", "summary.csv", "training.log"):
             (job_dir / filename).write_text("")
         _atomic_json(job_dir / "summary.json", [])
+        _atomic_json(job_dir / 'weights.json', {})
         _status(job_dir, state="complete", completed=0, total=0, current=None)
         return
     directories = []

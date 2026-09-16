@@ -113,6 +113,9 @@ def test_hash_excludes_presentation_and_keeps_v1_unchanged():
     for node in graph['nodes']:
         node['group'] = 'display-only'
         node['label'] = 'New title'
+    graph['view'] = {'renderer': 'three', 'version': 1, 'positions': {},
+                     'collapsed': [], 'expandedStages': ['overview:inputs', 'layer-core'],
+                     'camera': {'panX': 120, 'panY': 90, 'zoom': 0.6}}
     assert architecture_hash(graph) == fingerprint
     assert fingerprint != before
 

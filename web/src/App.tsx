@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Activity, BarChart3, Blocks, ChevronRight, CircleStop, Clock3, ExternalLink, FlaskConical, Layers3, LockKeyhole, X } from 'lucide-react'
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from 'recharts'
+import { Activity, BarChart3, Blocks, CircleStop, Clock3, ExternalLink, FlaskConical, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
+import CompareView from './CompareView'
+import { WorkspacePanels, SidePanel } from './WorkspacePanels'
 import GraphBuilder from './GraphBuilder'
+import BrandLogo from './BrandLogo'
 import { ErrorNotice } from './BuilderControls'
-import ForecastDiagnostics from './ForecastDiagnostics'
 import { api } from './api'
 import type { Job } from './types'
 
@@ -58,63 +60,59 @@ function FinalTestDialog({ job, onComplete }: { job: Job; onComplete: () => void
   return <Dialog.Root><Dialog.Trigger asChild><button className="text-button" disabled={job.status.preset === 'quick'}><FlaskConical size={14} />Final test</button></Dialog.Trigger><Dialog.Portal><Dialog.Overlay className="dialog-overlay" /><Dialog.Content className="dialog-content"><Dialog.Title>Unlock the held-out test set?</Dialog.Title><Dialog.Description>This candidate can be tested only once. Use this after architecture selection is complete.</Dialog.Description><label className="checkbox-row acknowledgement"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /><span>I understand this consumes the final evaluation for this candidate.</span></label><ErrorNotice error={mutation.error} /><div className="dialog-actions"><Dialog.Close asChild><button className="secondary-button">Cancel</button></Dialog.Close><button className="primary-button" disabled={!acknowledged || mutation.isPending} onClick={() => mutation.mutate()}>Start final test</button></div><Dialog.Close className="dialog-close" aria-label="Close"><X size={17} /></Dialog.Close></Dialog.Content></Dialog.Portal></Dialog.Root>
 }
 
-function CompareView({ jobs }: { jobs: Job[] }) {
-  const queryClient = useQueryClient()
-  const candidates = jobs.filter((job) => job.status.state === 'complete' && job.status.phase === 'validation' && job.summary.length)
-  const finalJobs = jobs.filter((job) => job.status.state === 'complete' && job.status.phase === 'final_test' && job.summary.length)
-  const [selected, setSelected] = useState<string[]>([])
-  const visible = selected.length ? candidates.filter((job) => selected.includes(job.id)) : candidates
-  const data = visible.map((job) => ({
-    id: job.id,
-    name: job.status.architecture_name,
-    mae: job.summary.reduce((sum, row) => sum + row.mae_ratio, 0) / job.summary.length,
-    mse: job.summary.reduce((sum, row) => sum + row.mse_ratio, 0) / job.summary.length,
-    parameters: job.summary.reduce((sum, row) => sum + row.parameters, 0) / job.summary.length,
-  }))
-  const pareto = new Set(data.filter((candidate) => !data.some((other) => other.id !== candidate.id && other.mae <= candidate.mae && other.mse <= candidate.mse && (other.mae < candidate.mae || other.mse < candidate.mse))).map((item) => item.id))
-  return (
-    <section className="content-view">
-      <div className="view-heading"><div><span className="eyebrow">Validation only</span><h2>Compare architectures</h2></div><span>Below 1.0 beats persistence</span></div>
-      {!candidates.length && <div className="large-empty panel-surface"><BarChart3 size={34} /><h3>No completed validation runs</h3><p>Comparison results appear after a Standard or Robust experiment completes.</p></div>}
-      {candidates.length > 0 && <>
-        <div className="compare-selector panel-surface">{candidates.map((job) => <label className="checkbox-row" key={job.id}><input type="checkbox" checked={selected.includes(job.id)} onChange={(event) => setSelected(event.target.checked ? [...selected, job.id] : selected.filter((id) => id !== job.id))} /><span>{job.status.architecture_name}</span><small>{job.status.preset}</small></label>)}</div>
-        <div className="charts-grid">
-          <article className="chart-panel panel-surface"><h3>Error relative to persistence</h3><ResponsiveContainer width="100%" height={310}><BarChart data={data}><CartesianGrid stroke="#e0e5de" vertical={false} /><XAxis dataKey="name" stroke="#68736d" tick={{ fontSize: 11 }} /><YAxis stroke="#68736d" /><Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #e0e5de' }} /><Legend /><Bar dataKey="mae" name="MAE ratio" fill="#287455" radius={[4, 4, 0, 0]} /><Bar dataKey="mse" name="MSE ratio" fill="#477cb2" radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></article>
-          <article className="chart-panel panel-surface"><h3>Accuracy–parameter trade-off</h3><ResponsiveContainer width="100%" height={310}><ScatterChart><CartesianGrid stroke="#e0e5de" /><XAxis type="number" dataKey="parameters" name="Parameters" stroke="#68736d" /><YAxis type="number" dataKey="mae" name="MAE ratio" stroke="#68736d" /><Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: '#ffffff', border: '1px solid #e0e5de' }} /><Scatter data={data} fill="#b58e3d" /></ScatterChart></ResponsiveContainer></article>
-        </div>
-        <ForecastDiagnostics jobs={visible} />
-        <div className="comparison-table panel-surface"><table><thead><tr><th>Architecture</th><th>Preset</th><th>MAE ratio</th><th>MSE ratio</th><th>Parameters</th><th>Selection</th><th /></tr></thead><tbody>{visible.map((job) => { const row = data.find((item) => item.id === job.id)!; return <tr key={job.id}><td><strong>{row.name}</strong></td><td>{job.status.preset}</td><td className={row.mae < 1 ? 'metric-good' : ''}>{formatMetric(row.mae, 3)}</td><td className={row.mse < 1 ? 'metric-good' : ''}>{formatMetric(row.mse, 3)}</td><td>{Math.round(row.parameters).toLocaleString()}</td><td>{pareto.has(job.id) ? <span className="pareto-badge">Pareto best</span> : 'Dominated'}</td><td><FinalTestDialog job={job} onComplete={() => queryClient.invalidateQueries({ queryKey: ['jobs'] })} /></td></tr> })}</tbody></table></div>
-      </>}
-      {finalJobs.length > 0 && <section className="final-results panel-surface"><div className="panel-title"><LockKeyhole size={17} /><span>Held-out final tests</span></div><p className="muted-copy">These results are separated from architecture selection and cannot be rerun for the same candidate configuration.</p><ForecastDiagnostics jobs={finalJobs} /><div className="comparison-table"><table><thead><tr><th>Architecture</th><th>Cell</th><th>Test MAE</th><th>Test MSE</th><th>MAE ratio</th><th>MSE ratio</th></tr></thead><tbody>{finalJobs.flatMap((job) => job.summary.map((row) => <tr key={`${job.id}-${row.window}-${row.horizon}`}><td><strong>{job.status.architecture_name}</strong></td><td>w{row.window}/h{row.horizon}</td><td>{formatMetric(row.mae_mean, 5)}</td><td>{formatMetric(row.mse_mean, 5)}</td><td className={row.mae_ratio < 1 ? 'metric-good' : ''}>{formatMetric(row.mae_ratio, 3)}</td><td className={row.mse_ratio < 1 ? 'metric-good' : ''}>{formatMetric(row.mse_ratio, 3)}</td></tr>))}</tbody></table></div></section>}
-    </section>
-  )
-}
-
 export default function App() {
   const [view, setView] = useState<View>('builder')
+  const queryClient = useQueryClient()
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try { return localStorage.getItem('hypercast.sidebar') !== 'closed' && window.innerWidth > 800 } catch { return window.innerWidth > 800 }
+  })
+  const [sidebar, setSidebar] = useState<HTMLElement | null>(null)
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try { return Math.max(260, Math.min(520, Number(localStorage.getItem('hypercast.sidebarWidth')) || 320)) } catch { return 320 }
+  })
+  const resizeStart = useRef<{ x: number; width: number } | null>(null)
+  const resizeSidebar = (width: number) => { const next = Math.max(260, Math.min(520, width)); setSidebarWidth(next); try { localStorage.setItem('hypercast.sidebarWidth', String(next)) } catch { /* Device preference only. */ } }
+  const [toolbar, setToolbar] = useState<HTMLElement | null>(null)
+  const [runId, setRunId] = useState('')
+  const [runState, setRunState] = useState('all')
   const catalog = useQuery({ queryKey: ['catalog'], queryFn: api.catalog, staleTime: Infinity })
   const jobs = useQuery({ queryKey: ['jobs'], queryFn: api.jobs, refetchInterval: 1500 })
+  const archives = useQuery({ queryKey: ['comparison-archives'], queryFn: api.comparisonArchives, enabled: view === 'compare', staleTime: 60000 })
   const legacyRuns = useQuery({ queryKey: ['legacy-runs'], queryFn: api.legacyRuns, staleTime: 5000 })
   const activeCount = useMemo(() => (jobs.data ?? []).filter((job) => ['queued', 'starting', 'running'].includes(job.status.state)).length, [jobs.data])
-  if (catalog.isLoading) return <div className="app-loading"><div className="loading-mark"><Layers3 /></div><p>Loading architecture catalog…</p></div>
+  if (catalog.isLoading) return <div className="app-loading"><BrandLogo className="loading-logo" /><p>Loading architecture catalog…</p></div>
   if (catalog.error || !catalog.data) return <div className="app-loading"><ErrorNotice error={catalog.error ?? new Error('Catalog unavailable')} /></div>
   return (
-    <div className="app-shell">
+    <WorkspacePanels.Provider value={{ sidebar, toolbar, openSidebar: () => { setSidebarOpen(true); try { localStorage.setItem('hypercast.sidebar', 'open') } catch { /* Device preference only. */ } } }}><div className={`app-shell unified-workspace ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${view === 'builder' ? 'canvas-shell' : ''}`} style={{ '--rail-width': `${sidebarWidth}px` } as CSSProperties}>
       <header className="app-header">
-        <button className="brand" onClick={() => setView('builder')}><span className="brand-mark"><Layers3 size={19} /></span><span><strong>HyperCast<span>4D</span></strong><small>Architecture Playground</small></span></button>
+        <button className="sidebar-toggle" aria-label={sidebarOpen ? 'Hide left panel' : 'Show left panel'} aria-expanded={sidebarOpen} aria-controls="workspace-sidebar" onClick={() => {
+          setSidebarOpen(!sidebarOpen)
+          try { localStorage.setItem('hypercast.sidebar', sidebarOpen ? 'closed' : 'open') } catch { /* Preference storage is optional. */ }
+        }}>{sidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}</button>
+        <button className="brand" aria-label="Hypercast Architecture Playground" onClick={() => setView('builder')}><BrandLogo /><small>Architecture Playground</small></button>
         <nav aria-label="Primary navigation">
           <button className={view === 'builder' ? 'active' : ''} onClick={() => setView('builder')}><Blocks size={16} />Builder</button>
           <button className={view === 'runs' ? 'active' : ''} onClick={() => setView('runs')}><Clock3 size={16} />Runs{activeCount > 0 && <span className="nav-count">{activeCount}</span>}</button>
           <button className={view === 'compare' ? 'active' : ''} onClick={() => setView('compare')}><BarChart3 size={16} />Compare</button>
         </nav>
-        <div className="local-badge"><span />Local workspace</div>
+        <div ref={setToolbar} className="topbar-tools">{view === 'runs' && <label className="topbar-single-picker"><span>Run</span><select aria-label="Select run" value={runId} onChange={e => setRunId(e.target.value)}><option value="">All runs</option>{(jobs.data ?? []).map(j => <option key={j.id} value={j.id}>{j.status.architecture_name} · {j.id.slice(-8)}</option>)}</select></label>}</div>
       </header>
-      <div className="app-content">
-            <div hidden={view !== 'builder'}><GraphBuilder catalog={catalog.data} /></div>
-        {view === 'runs' && <RunsView jobs={jobs.data ?? []} legacyRuns={legacyRuns.data ?? []} />}
-        {view === 'compare' && <CompareView jobs={jobs.data ?? []} />}
+      <div className="workspace-body">
+      <aside id="workspace-sidebar" className="workspace-sidebar" aria-label="Workspace controls" hidden={!sidebarOpen}>
+        <div ref={setSidebar} className="sidebar-content" />
+      </aside>
+      <div className="sidebar-resizer" hidden={!sidebarOpen} role="separator" aria-label="Resize left panel" aria-orientation="vertical" aria-valuemin={260} aria-valuemax={520} aria-valuenow={sidebarWidth} tabIndex={0}
+        onPointerDown={e => { resizeStart.current = { x: e.clientX, width: sidebarWidth }; e.currentTarget.setPointerCapture(e.pointerId); e.preventDefault() }}
+        onPointerMove={e => { if (resizeStart.current) resizeSidebar(resizeStart.current.width + e.clientX - resizeStart.current.x) }}
+        onPointerUp={e => { resizeStart.current = null; if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId) }}
+        onPointerCancel={() => { resizeStart.current = null }}
+        onKeyDown={e => { if (['ArrowLeft', 'ArrowRight', 'Home'].includes(e.key)) { e.preventDefault(); resizeSidebar(e.key === 'Home' ? 320 : sidebarWidth + (e.key === 'ArrowRight' ? 16 : -16)) } }} />
+      <main className="app-content">
+        <div className="builder-view" hidden={view !== 'builder'}><GraphBuilder catalog={catalog.data} active={view === 'builder'} /></div>
+        {view === 'runs' && <><SidePanel><section className="sidebar-section"><span className="eyebrow">Experiment history</span><h2>Runs</h2><label>Status<select aria-label="Filter run status" value={runState} onChange={e => setRunState(e.target.value)}>{['all', 'queued', 'starting', 'running', 'complete', 'failed', 'cancelled', 'interrupted'].map(s => <option key={s} value={s}>{s === 'all' ? 'All statuses' : s}</option>)}</select></label><p className="muted-copy">Select a run from the top bar to inspect its progress and saved scores.</p></section></SidePanel><ErrorNotice error={jobs.error} /><RunsView jobs={(jobs.data ?? []).filter(j => (!runId || j.id === runId) && (runState === 'all' || j.status.state === runState))} legacyRuns={runId ? [] : legacyRuns.data ?? []} /></>}
+        {view === 'compare' && <><ErrorNotice error={jobs.error} /><ErrorNotice error={archives.error} /><CompareView jobs={[...jobs.data ?? [], ...archives.data ?? []]} finalAction={job => <FinalTestDialog job={job} onComplete={() => queryClient.invalidateQueries({ queryKey: ['jobs'] })} />} /></>}
+      </main>
       </div>
-      <footer className="app-footer"><span>Local by default · data goes to Modal or GCP only when selected</span><span><ChevronRight size={13} /> Test metrics remain locked during architecture search</span></footer>
-    </div>
+    </div></WorkspacePanels.Provider>
   )
 }

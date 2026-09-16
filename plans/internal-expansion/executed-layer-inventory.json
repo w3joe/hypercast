@@ -1,0 +1,2521 @@
+[
+  {
+    "preset": "tslib-crossformer",
+    "window": 32,
+    "horizon": 5,
+    "passed": true,
+    "parameters": 80381,
+    "executed_linear_sites": [
+      {
+        "path": "layers.0.model.enc_value_embedding.value_embedding",
+        "in_features": 12,
+        "out_features": 32,
+        "bias": false,
+        "input_shape": [
+          8,
+          3,
+          12
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.time_attention.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.time_attention.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.time_attention.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.time_attention.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.MLP1.0",
+        "in_features": 32,
+        "out_features": 64,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          64
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.MLP1.2",
+        "in_features": 64,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          64
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.dim_sender.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          3,
+          32
+        ],
+        "output_shape": [
+          6,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.dim_sender.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.dim_sender.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.dim_sender.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          3,
+          32
+        ],
+        "output_shape": [
+          6,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.dim_receiver.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.dim_receiver.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          3,
+          32
+        ],
+        "output_shape": [
+          6,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.dim_receiver.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          3,
+          32
+        ],
+        "output_shape": [
+          6,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.dim_receiver.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.MLP2.0",
+        "in_features": 32,
+        "out_features": 64,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          64
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.encode_blocks.0.encode_layers.0.MLP2.2",
+        "in_features": 64,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          64
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.time_attention.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.time_attention.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.time_attention.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.time_attention.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.MLP1.0",
+        "in_features": 32,
+        "out_features": 64,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          64
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.MLP1.2",
+        "in_features": 64,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          64
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.dim_sender.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          3,
+          32
+        ],
+        "output_shape": [
+          6,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.dim_sender.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.dim_sender.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.dim_sender.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          3,
+          32
+        ],
+        "output_shape": [
+          6,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.dim_receiver.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.dim_receiver.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          3,
+          32
+        ],
+        "output_shape": [
+          6,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.dim_receiver.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          3,
+          32
+        ],
+        "output_shape": [
+          6,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.dim_receiver.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.MLP2.0",
+        "in_features": 32,
+        "out_features": 64,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          64
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.self_attention.MLP2.2",
+        "in_features": 64,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          64
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.cross_attention.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.cross_attention.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.cross_attention.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.cross_attention.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.MLP1.0",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.MLP1.2",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.0.linear_pred",
+        "in_features": 32,
+        "out_features": 12,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          3,
+          32
+        ],
+        "output_shape": [
+          2,
+          4,
+          3,
+          12
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.time_attention.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.time_attention.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.time_attention.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.time_attention.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.MLP1.0",
+        "in_features": 32,
+        "out_features": 64,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          64
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.MLP1.2",
+        "in_features": 64,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          64
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.dim_sender.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          3,
+          32
+        ],
+        "output_shape": [
+          6,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.dim_sender.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.dim_sender.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.dim_sender.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          3,
+          32
+        ],
+        "output_shape": [
+          6,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.dim_receiver.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.dim_receiver.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          3,
+          32
+        ],
+        "output_shape": [
+          6,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.dim_receiver.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          3,
+          32
+        ],
+        "output_shape": [
+          6,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.dim_receiver.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.MLP2.0",
+        "in_features": 32,
+        "out_features": 64,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          32
+        ],
+        "output_shape": [
+          6,
+          4,
+          64
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.self_attention.MLP2.2",
+        "in_features": 64,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          6,
+          4,
+          64
+        ],
+        "output_shape": [
+          6,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.cross_attention.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.cross_attention.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.cross_attention.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.cross_attention.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.MLP1.0",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.MLP1.2",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          3,
+          32
+        ],
+        "output_shape": [
+          8,
+          3,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.decoder.decode_layers.1.linear_pred",
+        "in_features": 32,
+        "out_features": 12,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          3,
+          32
+        ],
+        "output_shape": [
+          2,
+          4,
+          3,
+          12
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      }
+    ],
+    "cpu_seconds": 0.058963834002497606
+  },
+  {
+    "preset": "tslib-film",
+    "window": 32,
+    "horizon": 5,
+    "passed": true,
+    "parameters": 6292113,
+    "executed_linear_sites": [
+      {
+        "path": "layers.0.model.mlp",
+        "in_features": 3,
+        "out_features": 1,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          32,
+          3
+        ],
+        "output_shape": [
+          2,
+          4,
+          32,
+          1
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      }
+    ],
+    "cpu_seconds": 1.2680675000010524
+  },
+  {
+    "preset": "tslib-frets",
+    "window": 32,
+    "horizon": 5,
+    "passed": true,
+    "parameters": 1123877,
+    "executed_linear_sites": [
+      {
+        "path": "layers.0.model.fc.0",
+        "in_features": 4096,
+        "out_features": 256,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          4096
+        ],
+        "output_shape": [
+          2,
+          4,
+          256
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.fc.2",
+        "in_features": 256,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          256
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      }
+    ],
+    "cpu_seconds": 0.012331791993346997
+  },
+  {
+    "preset": "tslib-lightts",
+    "window": 32,
+    "horizon": 5,
+    "passed": true,
+    "parameters": 3235,
+    "executed_linear_sites": [
+      {
+        "path": "layers.0.model.ar",
+        "in_features": 48,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          48
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.layer_1.spatial_proj.0",
+        "in_features": 24,
+        "out_features": 8,
+        "bias": true,
+        "input_shape": [
+          8,
+          2,
+          24
+        ],
+        "output_shape": [
+          8,
+          2,
+          8
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.layer_1.spatial_proj.2",
+        "in_features": 8,
+        "out_features": 2,
+        "bias": true,
+        "input_shape": [
+          8,
+          2,
+          8
+        ],
+        "output_shape": [
+          8,
+          2,
+          2
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.layer_1.channel_proj",
+        "in_features": 2,
+        "out_features": 2,
+        "bias": true,
+        "input_shape": [
+          8,
+          2,
+          2
+        ],
+        "output_shape": [
+          8,
+          2,
+          2
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.layer_1.output_proj",
+        "in_features": 2,
+        "out_features": 8,
+        "bias": true,
+        "input_shape": [
+          8,
+          2,
+          2
+        ],
+        "output_shape": [
+          8,
+          2,
+          8
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.chunk_proj_1",
+        "in_features": 2,
+        "out_features": 1,
+        "bias": true,
+        "input_shape": [
+          8,
+          8,
+          2
+        ],
+        "output_shape": [
+          8,
+          8,
+          1
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.layer_2.spatial_proj.0",
+        "in_features": 24,
+        "out_features": 8,
+        "bias": true,
+        "input_shape": [
+          8,
+          2,
+          24
+        ],
+        "output_shape": [
+          8,
+          2,
+          8
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.layer_2.spatial_proj.2",
+        "in_features": 8,
+        "out_features": 2,
+        "bias": true,
+        "input_shape": [
+          8,
+          2,
+          8
+        ],
+        "output_shape": [
+          8,
+          2,
+          2
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.layer_2.channel_proj",
+        "in_features": 2,
+        "out_features": 2,
+        "bias": true,
+        "input_shape": [
+          8,
+          2,
+          2
+        ],
+        "output_shape": [
+          8,
+          2,
+          2
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.layer_2.output_proj",
+        "in_features": 2,
+        "out_features": 8,
+        "bias": true,
+        "input_shape": [
+          8,
+          2,
+          2
+        ],
+        "output_shape": [
+          8,
+          2,
+          8
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.chunk_proj_2",
+        "in_features": 2,
+        "out_features": 1,
+        "bias": true,
+        "input_shape": [
+          8,
+          8,
+          2
+        ],
+        "output_shape": [
+          8,
+          8,
+          1
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.layer_3.spatial_proj.0",
+        "in_features": 16,
+        "out_features": 16,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          16
+        ],
+        "output_shape": [
+          2,
+          4,
+          16
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.layer_3.spatial_proj.2",
+        "in_features": 16,
+        "out_features": 4,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          16
+        ],
+        "output_shape": [
+          2,
+          4,
+          4
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.layer_3.channel_proj",
+        "in_features": 4,
+        "out_features": 4,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          4
+        ],
+        "output_shape": [
+          2,
+          4,
+          4
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.layer_3.output_proj",
+        "in_features": 4,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          4
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      }
+    ],
+    "cpu_seconds": 0.0045860410027671605
+  },
+  {
+    "preset": "tslib-micn",
+    "window": 32,
+    "horizon": 5,
+    "passed": true,
+    "parameters": 81769,
+    "executed_linear_sites": [
+      {
+        "path": "layers.0.model.regression",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          32
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.conv_trans.projection",
+        "in_features": 32,
+        "out_features": 4,
+        "bias": true,
+        "input_shape": [
+          2,
+          64,
+          32
+        ],
+        "output_shape": [
+          2,
+          64,
+          4
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      }
+    ],
+    "cpu_seconds": 0.013775499988696538
+  },
+  {
+    "preset": "tslib-msgnet",
+    "window": 32,
+    "horizon": 5,
+    "passed": true,
+    "parameters": 67033,
+    "executed_linear_sites": [
+      {
+        "path": "layers.0.model.model.0.gconv.0.linear",
+        "in_features": 4,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          4
+        ],
+        "output_shape": [
+          2,
+          32,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.model.0.att0.attention.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          32
+        ],
+        "output_shape": [
+          2,
+          32,
+          32
+        ],
+        "calls": 3,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.model.0.att0.attention.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          32
+        ],
+        "output_shape": [
+          2,
+          32,
+          32
+        ],
+        "calls": 3,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.model.0.att0.attention.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          32
+        ],
+        "output_shape": [
+          2,
+          32,
+          32
+        ],
+        "calls": 3,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.model.0.att0.attention.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          32
+        ],
+        "output_shape": [
+          2,
+          32,
+          32
+        ],
+        "calls": 3,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.model.0.gconv.1.linear",
+        "in_features": 4,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          4
+        ],
+        "output_shape": [
+          2,
+          32,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.model.0.gconv.2.linear",
+        "in_features": 4,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          4
+        ],
+        "output_shape": [
+          2,
+          32,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.projection",
+        "in_features": 32,
+        "out_features": 4,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          32
+        ],
+        "output_shape": [
+          2,
+          32,
+          4
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.seq2pred.seq2pred",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          32
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      }
+    ],
+    "cpu_seconds": 0.016684415997588076
+  },
+  {
+    "preset": "tslib-patchtst",
+    "window": 32,
+    "horizon": 5,
+    "passed": true,
+    "parameters": 13893,
+    "executed_linear_sites": [
+      {
+        "path": "layers.0.model.patch_embedding.value_embedding",
+        "in_features": 16,
+        "out_features": 32,
+        "bias": false,
+        "input_shape": [
+          8,
+          4,
+          16
+        ],
+        "output_shape": [
+          8,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.attn_layers.0.attention.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          4,
+          32
+        ],
+        "output_shape": [
+          8,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.attn_layers.0.attention.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          4,
+          32
+        ],
+        "output_shape": [
+          8,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.attn_layers.0.attention.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          4,
+          32
+        ],
+        "output_shape": [
+          8,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.attn_layers.0.attention.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          4,
+          32
+        ],
+        "output_shape": [
+          8,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.head.linear",
+        "in_features": 128,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          128
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      }
+    ],
+    "cpu_seconds": 0.005574042006628588
+  },
+  {
+    "preset": "tslib-scinet",
+    "window": 32,
+    "horizon": 5,
+    "passed": true,
+    "parameters": 12773,
+    "executed_linear_sites": [],
+    "cpu_seconds": 0.024850500005413778
+  },
+  {
+    "preset": "tslib-segrnn",
+    "window": 32,
+    "horizon": 5,
+    "passed": true,
+    "parameters": 7661,
+    "executed_linear_sites": [
+      {
+        "path": "layers.0.model.valueEmbedding.0",
+        "in_features": 8,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          4,
+          8
+        ],
+        "output_shape": [
+          8,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.predict.1",
+        "in_features": 32,
+        "out_features": 8,
+        "bias": true,
+        "input_shape": [
+          1,
+          32,
+          32
+        ],
+        "output_shape": [
+          1,
+          32,
+          8
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      }
+    ],
+    "cpu_seconds": 0.0041400839982088655
+  },
+  {
+    "preset": "tslib-timemixer",
+    "window": 32,
+    "horizon": 5,
+    "passed": true,
+    "parameters": 16681,
+    "executed_linear_sites": [
+      {
+        "path": "layers.0.model.pdm_blocks.0.cross_layer.0",
+        "in_features": 32,
+        "out_features": 64,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          32
+        ],
+        "output_shape": [
+          2,
+          32,
+          64
+        ],
+        "calls": 4,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.pdm_blocks.0.cross_layer.2",
+        "in_features": 64,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          64
+        ],
+        "output_shape": [
+          2,
+          32,
+          32
+        ],
+        "calls": 4,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.pdm_blocks.0.mixing_multi_scale_season.down_sampling_layers.0.0",
+        "in_features": 32,
+        "out_features": 16,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          32
+        ],
+        "output_shape": [
+          2,
+          32,
+          16
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.pdm_blocks.0.mixing_multi_scale_season.down_sampling_layers.0.2",
+        "in_features": 16,
+        "out_features": 16,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          16
+        ],
+        "output_shape": [
+          2,
+          32,
+          16
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.pdm_blocks.0.mixing_multi_scale_trend.up_sampling_layers.0.0",
+        "in_features": 16,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          16
+        ],
+        "output_shape": [
+          2,
+          32,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.pdm_blocks.0.mixing_multi_scale_trend.up_sampling_layers.0.2",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          32
+        ],
+        "output_shape": [
+          2,
+          32,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.predict_layers.0",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          32
+        ],
+        "output_shape": [
+          2,
+          32,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.projection_layer",
+        "in_features": 32,
+        "out_features": 4,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          32
+        ],
+        "output_shape": [
+          2,
+          32,
+          4
+        ],
+        "calls": 2,
+        "gradient_present": true,
+        "divisible_by_8": false
+      },
+      {
+        "path": "layers.0.model.out_res_layers.0",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          32
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.regression_layers.0",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          32
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.predict_layers.1",
+        "in_features": 16,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          16
+        ],
+        "output_shape": [
+          2,
+          32,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.out_res_layers.1",
+        "in_features": 16,
+        "out_features": 16,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          16
+        ],
+        "output_shape": [
+          2,
+          4,
+          16
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.regression_layers.1",
+        "in_features": 16,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          16
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      }
+    ],
+    "cpu_seconds": 0.006791207997594029
+  },
+  {
+    "preset": "tslib-timesnet",
+    "window": 32,
+    "horizon": 5,
+    "passed": true,
+    "parameters": 147113,
+    "executed_linear_sites": [
+      {
+        "path": "layers.0.model.predict_linear",
+        "in_features": 32,
+        "out_features": 64,
+        "bias": true,
+        "input_shape": [
+          2,
+          32,
+          32
+        ],
+        "output_shape": [
+          2,
+          32,
+          64
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.projection",
+        "in_features": 32,
+        "out_features": 4,
+        "bias": true,
+        "input_shape": [
+          2,
+          64,
+          32
+        ],
+        "output_shape": [
+          2,
+          64,
+          4
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": false
+      }
+    ],
+    "cpu_seconds": 0.014070707999053411
+  },
+  {
+    "preset": "tslib-timexer",
+    "window": 32,
+    "horizon": 5,
+    "passed": true,
+    "parameters": 20133,
+    "executed_linear_sites": [
+      {
+        "path": "layers.0.model.en_embedding.value_embedding",
+        "in_features": 8,
+        "out_features": 32,
+        "bias": false,
+        "input_shape": [
+          8,
+          4,
+          8
+        ],
+        "output_shape": [
+          8,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.ex_embedding.value_embedding",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          32
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.layers.0.self_attention.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          5,
+          32
+        ],
+        "output_shape": [
+          8,
+          5,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.layers.0.self_attention.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          5,
+          32
+        ],
+        "output_shape": [
+          8,
+          5,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.layers.0.self_attention.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          5,
+          32
+        ],
+        "output_shape": [
+          8,
+          5,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.layers.0.self_attention.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          8,
+          5,
+          32
+        ],
+        "output_shape": [
+          8,
+          5,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.layers.0.cross_attention.query_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          32
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.layers.0.cross_attention.key_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          32
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.layers.0.cross_attention.value_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          32
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.encoder.layers.0.cross_attention.out_projection",
+        "in_features": 32,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          32
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      },
+      {
+        "path": "layers.0.model.head.linear",
+        "in_features": 160,
+        "out_features": 32,
+        "bias": true,
+        "input_shape": [
+          2,
+          4,
+          160
+        ],
+        "output_shape": [
+          2,
+          4,
+          32
+        ],
+        "calls": 1,
+        "gradient_present": true,
+        "divisible_by_8": true
+      }
+    ],
+    "cpu_seconds": 0.005157541992957704
+  }
+]

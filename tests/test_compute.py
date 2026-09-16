@@ -38,3 +38,13 @@ def test_modal_capability_does_not_expose_credentials(monkeypatch) -> None:
         "gpus",
         "setup_command",
     }
+
+
+def test_modal_timeout_survives_normalization():
+    assert normalize_execution({'target': 'modal', 'gpu': 'L4', 'timeout_seconds': 3600})['timeout_seconds'] == 3600
+
+
+@pytest.mark.parametrize('timeout', [True, 0, -1, 59, 86401, 1.5, '3600'])
+def test_invalid_modal_timeout_rejected(timeout):
+    with pytest.raises(ValueError, match='timeout_seconds'):
+        normalize_execution({'target': 'modal', 'timeout_seconds': timeout})

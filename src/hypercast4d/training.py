@@ -22,6 +22,8 @@ class FitResult:
     best_validation_loss: float
     train_seconds: float
     process_peak_rss_mb: float
+    peak_gpu_allocated_mb: float | None = None
+    best_epoch: int = 0
 
 
 def seed_everything(seed: int | None) -> None:
@@ -60,6 +62,7 @@ def fit_model(
     restore_best_weights: bool,
     device: torch.device,
     epoch_callback: Callable[[int, float, float], None] | None = None,
+    early_stopping_relative_delta: float = 0.0,
 ) -> FitResult:
     seed_everything(seed)
     model.to(device)
@@ -87,8 +90,12 @@ def fit_model(
     else:
         raise ValueError("loss must be 'mse', 'mae', or 'huber'")
     best_loss = float("inf")
+    best_epoch = 0
     best_state: dict[str, torch.Tensor] | None = None
     stale_epochs = 0
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+        torch.cuda.reset_peak_memory_stats(device)
     start = time.perf_counter()
     epochs_ran = 0
 
@@ -100,6 +107,8 @@ def fit_model(
             features, targets = features.to(device), targets.to(device)
             optimizer.zero_grad(set_to_none=True)
             loss = criterion(model(features), targets)
+            if not bool(torch.isfinite(loss)):
+                raise RuntimeError(f"Nonfinite training loss at epoch {epoch + 1}")
             loss.backward()
             optimizer.step()
             total_train_loss += loss.item() * len(features)
@@ -115,6 +124,8 @@ def fit_model(
                 total_loss += batch_loss.item() * len(features)
                 total_items += len(features)
         validation_loss = total_loss / total_items
+        if not np.isfinite(validation_loss):
+            raise RuntimeError(f"Nonfinite validation loss at epoch {epoch + 1}")
         epochs_ran = epoch + 1
         if epoch_callback is not None:
             epoch_callback(
@@ -122,8 +133,10 @@ def fit_model(
                 total_train_loss / total_train_items,
                 validation_loss,
             )
-        if validation_loss < best_loss - early_stopping_min_delta:
+        threshold = max(early_stopping_min_delta, abs(best_loss) * early_stopping_relative_delta) if np.isfinite(best_loss) else 0.0
+        if validation_loss < best_loss - threshold:
             best_loss = validation_loss
+            best_epoch = epochs_ran
             best_state = copy.deepcopy(model.state_dict())
             stale_epochs = 0
         else:
@@ -138,12 +151,39 @@ def fit_model(
         raise RuntimeError("Training did not produce a checkpoint")
     if restore_best_weights:
         model.load_state_dict(best_state)
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
     return FitResult(
         epochs_ran=epochs_ran,
+        best_epoch=best_epoch,
         best_validation_loss=best_loss,
         train_seconds=time.perf_counter() - start,
         process_peak_rss_mb=_peak_rss_mb(),
+        peak_gpu_allocated_mb=(torch.cuda.max_memory_allocated(device) / 1024**2
+                               if device.type == "cuda" else None),
     )
+
+
+def benchmark_inference(model: nn.Module, features: torch.Tensor, device: torch.device,
+                        batch_size: int = 32, warmup: int = 10, repeats: int = 30) -> dict:
+    """Resident-input latency at a fixed batch size; excludes host/device transfer."""
+    if len(features) < batch_size:
+        raise ValueError("Not enough examples for the fixed inference benchmark batch")
+    inputs = features[:batch_size].to(device)
+    model.eval()
+    with torch.inference_mode():
+        for _ in range(warmup):
+            model(inputs)
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        start = time.perf_counter()
+        for _ in range(repeats):
+            model(inputs)
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        duration = time.perf_counter() - start
+    return {"inference_batch_size": batch_size, "inference_warmup": warmup,
+            "inference_repeats": repeats, "inference_ms_per_batch": 1000 * duration / repeats}
 
 
 def predict(

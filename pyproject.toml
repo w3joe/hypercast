@@ -9,7 +9,7 @@ description = "Clean-room evaluation of 4D hypercomplex time-series forecasting"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
-authors = [{name = "HyperCast4D contributors"}]
+authors = [{name = "Hypercast contributors"}]
 dependencies = [
   "einops>=0.8,<1",
   "scipy>=1.13,<2",
@@ -30,6 +30,7 @@ dev = ["httpx2>=2.0", "pytest>=8.0"]
 modal = ["modal>=1.4,<2"]
 
 [project.scripts]
+hypercast = "hypercast4d.cli:main"
 hypercast4d-dashboard = "hypercast4d.dashboard:main"
 hypercast4d-download = "hypercast4d.download:main"
 hypercast4d-playground = "hypercast4d.playground:main"

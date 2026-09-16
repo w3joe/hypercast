@@ -22,8 +22,10 @@ export type GraphSpec = {
   locked?: boolean
   preset_id?: string
 }
-export type GraphViewState = { positions: Record<string, { x: number; y: number }>; collapsed: string[] }
-export type GraphNodeInfo = { label: string; ports: string[]; shape: unknown; settings: Record<string, unknown>; category: string; source_path?: string }
+export type DiagramCamera = { panX: number; panY: number; zoom: number }
+export type GraphViewState = { positions: Record<string, { x: number; y: number }>; collapsed: string[]; expandedStages?: string[]; direction?: 'LR'; renderer?: 'flow' | 'three'; version?: 1; camera?: DiagramCamera }
+export type ShapeFit = { axis: number; input_width: number; padded_width: number; units: number; output_width: number; padding: number; crop: number }
+export type GraphNodeInfo = { label: string; ports: string[]; shape: unknown; settings: Record<string, unknown>; category: string; source_path?: string; shape_fit?: ShapeFit }
 export type GraphValidation = { valid: boolean; spec: GraphSpec; parameters: number; graph_nodes: Record<string, GraphNodeInfo>; warnings: string[] }
 export type GraphRecord = { id: string; spec: GraphSpec | ArchitectureSpec; view?: GraphViewState }
 
@@ -139,6 +141,7 @@ export type EvaluationDefaults = {
 }
 
 export type EvaluationSpec = EvaluationDefaults & {
+  folds?: { train_fraction: number; validation_fraction: number }[]
   preset: 'quick' | 'standard' | 'robust'
   cells: EvaluationCell[]
   seeds: number[]
@@ -244,6 +247,16 @@ export type Job = {
   runs: Record<string, string | number | null>[]
   per_lead: Record<string, string | number | null>[]
 }
+
+export type ArchivedComparisonJob = Omit<Job, 'request' | 'status'> & {
+  status: Omit<Job['status'], 'protocol'> & { protocol: string }
+  request: {
+    evaluation: Omit<EvaluationSpec, 'protocol' | 'preset'> & { protocol: string; preset: string; target_scale: string; split_metadata: Record<string, number[]> }
+    execution?: ExecutionSpec
+  }
+  archive: { collection: string; backbone: string; variant: string; source: string; target_scale: string; task: string; forecasts: boolean; note: string; split_description: string }
+}
+export type ComparisonJob = Job | ArchivedComparisonJob
 
 export type ArchitectureRecord = {
   id: string

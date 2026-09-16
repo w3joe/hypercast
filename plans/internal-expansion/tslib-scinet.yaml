@@ -1,0 +1,21 @@
+schema_version: 1
+name: SCINet (TSLib core, editable)
+input:
+  representation: levels
+  feature_order:
+  - 0
+  - 1
+  - 2
+  - 3
+layers:
+- id: core
+  type: tslib_scinet
+  params: {}
+- id: flatten
+  type: flatten
+  params: {}
+head:
+  type: direct
+  zero_initialize: false
+locked: false
+preset_id: tslib-scinet

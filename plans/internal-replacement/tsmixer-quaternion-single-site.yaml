@@ -1,0 +1,313 @@
+schema_version: 2
+revision: source-graph-1-tslib-4e938a1767106324dd753b2a44832bf870a0252e
+name: TSMixer (TSLib core, editable) + Original
+sources:
+  s0:
+    schema_version: 1
+    name: TSMixer (TSLib core, editable) + Original
+    input:
+      representation: levels
+      feature_order:
+      - 0
+      - 1
+      - 2
+      - 3
+    layers:
+    - id: core
+      type: tslib_tsmixer
+      params:
+        d_model: 32
+        dropout: 0.1
+        num_layers: 1
+    - id: flatten
+      type: flatten
+      params: {}
+    head:
+      type: direct
+      zero_initialize: false
+nodes:
+- id: inputs
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: inputs
+- id: getitem
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem
+- id: getitem_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_1
+- id: transpose
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: transpose
+  group: layer-core
+- id: pad
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: pad
+  group: layer-core
+- id: transpose_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: transpose_1
+  group: layer-core
+- id: zeros_like
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: zeros_like
+  group: layer-core
+- id: transpose_2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: transpose_2
+  group: layer-core
+- id: layers_0_model_model_0_temporal_0
+  kind: hyper_dense
+  params:
+    units: 8
+    bias: true
+    algebra: quaternion
+  group: layer-core
+- id: layers_0_model_model_0_temporal_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_model_0_temporal_1
+  module_ref: s0:layers.0.model.model.0.temporal.1
+  group: layer-core
+- id: layers_0_model_model_0_temporal_2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_model_0_temporal_2
+  module_ref: s0:layers.0.model.model.0.temporal.2
+  group: layer-core
+- id: layers_0_model_model_0_temporal_3
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_model_0_temporal_3
+  module_ref: s0:layers.0.model.model.0.temporal.3
+  group: layer-core
+- id: transpose_3
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: transpose_3
+  group: layer-core
+- id: add
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: add
+  group: layer-core
+- id: layers_0_model_model_0_channel_0
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_model_0_channel_0
+  module_ref: s0:layers.0.model.model.0.channel.0
+  group: layer-core
+- id: layers_0_model_model_0_channel_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_model_0_channel_1
+  module_ref: s0:layers.0.model.model.0.channel.1
+  group: layer-core
+- id: layers_0_model_model_0_channel_2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_model_0_channel_2
+  module_ref: s0:layers.0.model.model.0.channel.2
+  group: layer-core
+- id: layers_0_model_model_0_channel_3
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_model_0_channel_3
+  module_ref: s0:layers.0.model.model.0.channel.3
+  group: layer-core
+- id: add_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: add_1
+  group: layer-core
+- id: transpose_4
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: transpose_4
+  group: layer-core
+- id: layers_0_model_projection
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: layers_0_model_projection
+  module_ref: s0:layers.0.model.projection
+  group: layer-core
+- id: transpose_5
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: transpose_5
+  group: layer-core
+- id: getitem_2
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_2
+  group: layer-core
+- id: getitem_3
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: getitem_3
+  group: layer-core
+- id: flatten
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: flatten
+  group: layer-flatten
+- id: output
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: output
+  module_ref: s0:output
+- id: output_1
+  kind: source
+  params: {}
+  source_ref:
+    source: s0
+    node: output_1
+edges:
+- source: inputs
+  target: getitem
+  port: args/0
+- source: inputs
+  target: getitem_1
+  port: args/0
+- source: getitem_1
+  target: transpose
+  port: args/0
+- source: transpose
+  target: pad
+  port: args/0
+- source: pad
+  target: transpose_1
+  port: args/0
+- source: transpose_1
+  target: zeros_like
+  port: args/0
+- source: transpose_1
+  target: transpose_2
+  port: args/0
+- source: transpose_2
+  target: layers_0_model_model_0_temporal_0
+  port: x
+- source: layers_0_model_model_0_temporal_0
+  target: layers_0_model_model_0_temporal_1
+  port: args/0
+- source: layers_0_model_model_0_temporal_1
+  target: layers_0_model_model_0_temporal_2
+  port: args/0
+- source: layers_0_model_model_0_temporal_2
+  target: layers_0_model_model_0_temporal_3
+  port: args/0
+- source: layers_0_model_model_0_temporal_3
+  target: transpose_3
+  port: args/0
+- source: transpose_1
+  target: add
+  port: args/0
+- source: transpose_3
+  target: add
+  port: args/1
+- source: add
+  target: layers_0_model_model_0_channel_0
+  port: args/0
+- source: layers_0_model_model_0_channel_0
+  target: layers_0_model_model_0_channel_1
+  port: args/0
+- source: layers_0_model_model_0_channel_1
+  target: layers_0_model_model_0_channel_2
+  port: args/0
+- source: layers_0_model_model_0_channel_2
+  target: layers_0_model_model_0_channel_3
+  port: args/0
+- source: add
+  target: add_1
+  port: args/0
+- source: layers_0_model_model_0_channel_3
+  target: add_1
+  port: args/1
+- source: add_1
+  target: transpose_4
+  port: args/0
+- source: transpose_4
+  target: layers_0_model_projection
+  port: args/0
+- source: layers_0_model_projection
+  target: transpose_5
+  port: args/0
+- source: transpose_5
+  target: getitem_2
+  port: args/0
+- source: getitem_2
+  target: getitem_3
+  port: args/0
+- source: getitem_3
+  target: flatten
+  port: args/0
+- source: flatten
+  target: output
+  port: args/0
+- source: output
+  target: output_1
+  port: args/0
+groups:
+- id: layer-core
+  label: tsmixer
+- id: layer-flatten
+  label: flatten
+output: output_1
+locked: false

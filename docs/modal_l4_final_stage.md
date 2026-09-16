@@ -1,0 +1,33 @@
+# Locked retrospective final comparison — 11 September 2026
+
+The robustness stage completed all 162 fits without failures, preserving all 27 configurations, two seeds and three folds. Its conservative cost was $6.715816, close to the $6.76 plan. The whole-programme ledger is $14.720967. Source checks, 24,300 epoch records, 162 initialization records and saved prediction-derived MAEs passed verification. See `controller/robustness-analysis/report.md` for the complete validation comparison.
+
+## Decision before test access
+
+Run the balanced final comparison already contemplated in the controlled-stage plan. Hypothesis: frontend error patterns and relative compression tradeoffs persist in the reserved final period. All real controls and all three algebra dimensions are retained across all three backbones. The final period is historical and cannot be called previously unseen: the local metadata audit found an interrupted historical final-test request, and absence of local scores cannot establish absence of earlier exposure. This stage is a locked retrospective comparison, not prospective or cross-dataset confirmation.
+
+The validation results do not establish a useful forecasting advantage. Every hypercomplex configuration's mean ratio exceeds its original backbone and persistence. No hyper-versus-real comparison at the prespecified block length establishes the >2% practical benefit criterion after multiplicity adjustment. This motivates retaining every negative comparison rather than selecting a promising winner.
+
+## Frozen matrix
+
+Use all 27 completed robustness parent jobs, inheriting architecture, inputs, target, matched-v1 initialization, optimizer, batch size, learning rate, window 20/horizon 5 and benchmark options exactly. Refit each model for 150 epochs on the first 85%, then evaluate the final 15%, once for each frozen seed 101 and 211. Training and normalization use the training prefix only; no test-based early stopping, epoch selection, rate changes or checkpoint restoration. Each final job contains two fits, for 54 total fits in 27 sequential jobs on one L4.
+
+The parent median-epoch rule yields exactly 150 because every parent fit used 150. Final initialization uses the existing fold-0 named stream, paired across same-shaped modules. Save two initialization records, 300 epoch records, metrics, predictions, per-lead diagnostics, actual GPU, package versions and timing/memory metadata. The epoch file's `validation_loss` field repeats evaluation on the training dataset during refitting; it is not loss on the locked test. No scores are used to change the pending queue. Do not report an aggregate winner until the entire matrix is complete.
+
+The preparer links each final candidate to its exact robustness parent and separates validation and final phases when recovering jobs. The backend's candidate-level test-once guard remains enforced even if a timeout changes. No automatic scientific retries are allowed in this stage; interrupted/failed outcomes remain visible and all costs count. A lost HTTP response may recover the same existing job, never launch a new candidate as a workaround.
+
+## Analysis fixed before launch
+
+Use the same 36-contrast family, 2% practical margin (5% sensitivity), equal-seed loss averaging, 10,000 paired circular block resamples, block lengths 60/30/120 and RNG seed 20260911 as robustness. The final test has one fold: compute relative MAE effects using jointly resampled origins and average absolute errors over the five leads and both seeds before resampling. Report pointwise 95% and Bonferroni family-wise 95% percentile intervals, together with origin counts, effective block counts and the limits of extreme-tail Monte Carlo estimates. Treat sensitivity-dependent findings or insufficient effective blocks as inconclusive; a nonsignificant contrast is not equivalence. Validation and test periods must remain separate in all reported estimates.
+
+Report original and lift-only comparisons descriptively, all per-lead errors, seed dispersion, failure rate, total parameters, peak GPU allocation, synchronized training and inference measurements. Distinguish relative gains against added real dense from usefulness against persistence and original models. A compression benefit needs the predefined noninferiority criterion and measured whole-model savings; layer parameter savings alone do not establish runtime or accuracy benefits. No follow-up recipe will be tuned on these test outcomes.
+
+## Budget and stop criteria
+
+Final training time is forecast from the completed robustness fits: total training seconds /3 × (0.85/0.65), plus 30 seconds overhead and $0.05 allowance per job, with the original 3x cost factor. This gives approximately $4.00 for all 54 final fits. The available allocation after the $1 safety reserve is $4.279033. The preparer also simulates each admission with the full timeout reservation and rejects the stage if that forecast cannot admit all 27 jobs.
+
+Each final job has a **300-second Modal timeout** and reserves that full duration plus 120 seconds overhead, approximately $0.37431. The observed selected robust training times imply roughly 40–150 seconds of final training per job; this timeout is a budget-conscious cap, not a completion guarantee. The previous 1,200-second reservation would prevent finishing the final matrix under the current conservative budget. Timeout changes are execution-only; they must not alter inherited epochs, seeds or training settings. Existing cumulative charges and the $1 reserve remain untouched.
+
+The controller must stop at any insufficient reservation, unresolved cloud/billing status or changed frozen input; active jobs retain their reservations and remote timeouts. If actual costs or failures prevent completion, report the matrix as incomplete and do not unlock extra budget, drop losing families or reinterpret partial results as a complete comparison. The projected $4.00 is not an invoice or a guaranteed cap; the cumulative guard remains authoritative.
+
+The final stage versions only execution/observability changes: a validated timeout override for final-test API/CLI, phase-aware controller reconciliation, disabled final retries and saved final initialization/epoch artifacts. Model equations, numerical initialization, data handling, optimizer and final split are unchanged. `controller/final-provenance/` preserves the prior state and hashes, the new source snapshot and manifest, this protocol, full robustness analysis and the metadata-only test-exposure audit. Remote dependencies remain pinned; runtime artifacts record the actual image ID. Stop the old idle backend and restart it once before resuming the existing controller service.

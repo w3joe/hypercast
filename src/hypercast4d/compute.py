@@ -39,7 +39,13 @@ def normalize_execution(raw: dict[str, Any] | None) -> dict[str, Any]:
         raise ValueError(
             f"unsupported Modal GPU {gpu!r}; choose one of {sorted(MODAL_GPU_IDS)}"
         )
-    return {"target": "modal", "gpu": gpu}
+    execution = {"target": "modal", "gpu": gpu}
+    if "timeout_seconds" in raw:
+        timeout = raw["timeout_seconds"]
+        if isinstance(timeout, bool) or not isinstance(timeout, int) or not 60 <= timeout <= 86400:
+            raise ValueError("Modal timeout_seconds must be an integer from 60 to 86400")
+        execution["timeout_seconds"] = timeout
+    return execution
 
 
 def _modal_executable() -> str | None:

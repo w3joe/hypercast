@@ -1,9 +1,19 @@
 .forecast-diagnostics { display: grid; gap: 18px; margin: 28px 0; min-width: 0; }
 .diagnostic-heading { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 .diagnostic-heading h3 { margin: 6px 0 0; font-size: 21px; }
-.diagnostic-heading label { display: grid; gap: 6px; font-size: 12px; color: #526459; max-width: 100%; }
-.diagnostic-heading select { padding: 9px 12px; border: 1px solid #d2dcd1; border-radius: 8px; background: white; max-width: min(560px, 100%); }
-.diagnostic-caption { color: #647168; font-size: 12px; line-height: 1.6; min-height: 40px; margin: 6px 0 12px; }
+.diagnostic-heading label { display: grid; gap: 6px; font-size: 12px; color: #525664; max-width: 100%; }
+.diagnostic-heading select { padding: 9px 12px; border: 1px solid #d1d4dc; border-radius: 8px; background: white; max-width: min(560px, 100%); }
+.diagnostic-caption { color: #646771; font-size: 12px; line-height: 1.6; min-height: 40px; margin: 6px 0 12px; }
 .diagnostic-notice { padding: 16px; background: #f5f0dc; border-radius: 10px; color: #6d5b28; }
-.diagnostic-run-id { display: block; margin-top: 4px; color: #68736d; }
+.diagnostic-run-id { display: block; margin-top: 4px; color: #63708c; }
 .forecast-diagnostics .comparison-table { overflow-x: auto; }
+.diagnostic-picker { padding: 14px 16px; min-width: 0; }
+.diagnostic-picker summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+.diagnostic-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; max-height: 260px; overflow-y: auto; }
+.diagnostic-options label { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; overflow-wrap: anywhere; }
+.diagnostic-options input { flex: 0 0 auto; margin-top: 3px; }
+.diagnostic-legend { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px 20px; }
+.diagnostic-legend li { display: flex; gap: 9px; align-items: flex-start; font-size: 12px; overflow-wrap: anywhere; min-width: 0; }
+.diagnostic-swatch { width: 20px; height: 3px; margin-top: 7px; flex: 0 0 auto; border-radius: 2px; }
+.forecast-diagnostics .chart-panel { overflow: hidden; }
+.forecast-diagnostics .recharts-tooltip-wrapper { max-width: 95%; font-size: 12px; }

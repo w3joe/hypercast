@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { prepareDenseSwap } from './layerSwap'
 
 const paperPreset = {
   schema_version: 1,
@@ -18,11 +19,22 @@ const paperPreset = {
 
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {}; unobserve() {}; disconnect() {} })
-  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
     const path = String(input)
+    if (path.endsWith('/architectures/edit')) {
+      const payload = JSON.parse(String(options?.body))
+      const response = await fetch('/api/v1/architectures/validate', { method: 'POST', body: JSON.stringify({ architecture: payload.architecture, ...payload.cells[0] }) })
+      const validation = await response.json()
+      try {
+        const spec = prepareDenseSwap(payload.architecture, payload.edit.id, payload.edit.kind, validation.graph_nodes, payload.edit.params.algebra)
+        return new Response(JSON.stringify({ spec, warnings: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      } catch (error) {
+        return new Response(JSON.stringify({ detail: String(error) }), { status: 422, headers: { 'Content-Type': 'application/json' } })
+      }
+    }
     const body = path.includes('catalog') ? {
       schema_version: 1,
-      categories: [{ name: 'Feature mixing', layers: [{ type: 'dense', label: 'Dense', defaults: { units: 32 } }] }],
+      categories: [{ name: 'Feature mixing', layers: [{ type: 'dense', label: 'Dense', defaults: { units: 32 } }, { type: 'hyper_dense', label: 'HyperDense', defaults: { units: 8, algebra: 'quaternion' } }, { type: 'dropout', label: 'Dropout', defaults: { p: .1 } }] }],
       input_representations: ['levels', 'centered', 'differences'],
       head_types: ['direct', 'persistence_residual', 'cumulative_residual'],
       algebras: ['complex', 'split_complex', 'tricomplex', 'quaternion', 'coquaternion', 'cl11', 'octonion'],
@@ -87,16 +99,13 @@ beforeEach(() => {
 })
 
 
-vi.mock('@xyflow/react', () => ({
-  ReactFlowProvider: ({ children }: any) => children,
-  useReactFlow: () => ({ fitView: vi.fn(), screenToFlowPosition: (p: any) => p }),
-  Handle: () => null, Position: { Top: 'top', Bottom: 'bottom' }, MarkerType: { ArrowClosed: 'arrowclosed' }, Background: () => null, Controls: () => null, MiniMap: () => null,
-  applyNodeChanges: (_: any, nodes: any) => nodes,
-  ReactFlow: ({ nodes, nodeTypes, onSelectionChange, children }: any) => <div data-testid="flow">{nodes.map((n: any) => {
-    const Component = nodeTypes[n.type]
-    return <div key={n.id}><button onClick={() => onSelectionChange({ nodes: [n], edges: [] })}>Select {n.id}</button><Component data={n.data} /></div>
-  })}{children}</div>,
-}))
+vi.mock('./ArchitectureDiagram', async () => {
+  const React = await import('react')
+  return { default: React.forwardRef(({ scene, onSelect, onToggle, onInsert, inserting }: any, ref: any) => {
+    React.useImperativeHandle(ref, () => ({ fit: vi.fn(), zoom: vi.fn(), hold: vi.fn() }))
+    return <div data-testid="diagram">{scene.blocks.map((b: any) => <div key={b.id}><button onClick={() => onSelect(b.id, false)}>Select {b.id}</button>{b.stage && <button onClick={() => onToggle(b.stage)}>Expand diagram {b.label}</button>}</div>)}{inserting && scene.routes.map((r: any) => <button key={r.id} onClick={() => onInsert(r.id)}>Insert {r.id}</button>)}</div>
+  }) }
+})
 const executableGraph = { schema_version: 2, revision: 'test', name: 'Paper Quaternion', sources: { s0: paperPreset },
   nodes: [{ id: 'input', kind: 'source', params: {} }, { id: 'linear', kind: 'source', params: {}, group: 'core', source_ref: { source: 's0', node: 'linear' }, module_ref: 'weights' }, { id: 'output', kind: 'source', params: {} }],
   edges: [{ source: 'input', target: 'linear', port: 'args/0' }, { source: 'linear', target: 'output', port: 'args/0' }], groups: [{ id: 'core', label: 'Model core' }], output: 'output' }
@@ -108,6 +117,171 @@ const graphInfo = {
 function renderApp() { render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><App /></QueryClientProvider>) }
 
 describe('graph-native playground', () => {
+  it('docks controls on the left, preserves edits while hidden, and switches panel content with navigation', async () => {
+    renderApp()
+    fireEvent.click(await screen.findByRole('button', { name: 'Clone to edit' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Graph name' }), { target: { value: 'Preserved canvas' } }); fireEvent.blur(screen.getByRole('textbox', { name: 'Graph name' }))
+    const aside = screen.getByRole('complementary', { name: 'Workspace controls' })
+    expect(aside).toContainElement(screen.getByRole('combobox', { name: 'Load graph preset' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hide left panel' }))
+    expect(aside).not.toBeVisible()
+    expect(screen.getByLabelText('Architecture canvas')).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Show left panel' }))
+    expect(screen.getByRole('textbox', { name: 'Graph name' })).toHaveValue('Preserved canvas')
+    fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
+    expect(aside).toContainElement(screen.getByLabelText('Comparison metric'))
+    expect(screen.queryByRole('combobox', { name: 'Load graph preset' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Builder' }))
+    expect(screen.getByRole('textbox', { name: 'Graph name' })).toHaveValue('Preserved canvas')
+  })
+  it('finds layers with the keyboard even when the sidebar is hidden', async () => {
+    renderApp()
+    await screen.findByRole('textbox', { name: 'Search layers' })
+    fireEvent.click(screen.getByRole('tab', { name: 'Inspect' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hide left panel' }))
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true })
+    const search = await screen.findByRole('textbox', { name: 'Search layers' })
+    await waitFor(() => expect(search).toHaveFocus())
+    expect(screen.getByRole('complementary', { name: 'Workspace controls' })).toBeVisible()
+    fireEvent.change(search, { target: { value: 'Linear' } })
+    expect(screen.getByRole('button', { name: 'Select linear' })).toBeVisible()
+    fireEvent.change(search, { target: { value: 'not-a-layer' } })
+    expect(screen.getByText(/No matching layers/)).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear layer search' }))
+    expect(search).toHaveValue('')
+  })
+  it('inserts from the arrow plus at a collapsed stage boundary as one undoable action', async () => {
+    const originalFetch = fetch
+    const saved: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      if (String(input).endsWith('/architectures') && options?.body) { const payload = JSON.parse(String(options.body)); saved.push(payload); return new Response(JSON.stringify({ id: 'saved', spec: payload })) }
+      return originalFetch(input, options)
+    }))
+    renderApp()
+    fireEvent.click(await screen.findByRole('button', { name: 'Select group:core' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clone to edit' }))
+    expect(screen.queryByRole('button', { name: 'Add after' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Add' }))
+    fireEvent.click(screen.getByRole('button', { name: `Insert ${JSON.stringify(['linear', 'output', 'args/0'])}` }))
+    expect(screen.getByLabelText('Insertion destination')).toHaveValue(JSON.stringify(['linear', 'output', 'args/0']))
+    fireEvent.click(screen.getByTitle('Add Dense'))
+    await screen.findByRole('button', { name: /^Select dense-/ })
+    fireEvent.click(screen.getByRole('tab', { name: 'Architecture' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save graph' }))
+    await waitFor(() => expect(saved).toHaveLength(1))
+    const added = saved[0].nodes.find((n: any) => n.kind === 'dense')
+    expect(saved[0].edges).toEqual(expect.arrayContaining([{ source: 'linear', target: added.id, port: 'x' }, { source: added.id, target: 'output', port: 'args/0' }]))
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save graph' }))
+    await waitFor(() => expect(saved).toHaveLength(2))
+    expect(saved[1].edges).toEqual(executableGraph.edges)
+    expect(saved[1].nodes).toEqual(executableGraph.nodes)
+  })
+  it('auto-fits inserted HyperDense and repairs an invalid manual draft with undo and redo', async () => {
+    const originalFetch = fetch, saved: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(input), payload = options?.body ? JSON.parse(String(options.body)) : null
+      if (path.endsWith('/architectures') && payload) { saved.push(payload); return new Response(JSON.stringify({ id: 'saved', spec: payload })) }
+      const node = payload?.architecture?.nodes?.find((n: any) => n.kind === 'hyper_dense')
+      if (path.endsWith('/validate') && node) {
+        if (node.params.shape_mode !== 'preserve') return new Response(JSON.stringify({ detail: 'Node add_1: width 32 must match 4' }), { status: 422 })
+        return new Response(JSON.stringify({ valid: true, parameters: 20, warnings: [], graph_nodes: { ...graphInfo,
+          [node.id]: { label: 'hyper_dense', category: 'custom', ports: ['x'], shape: [2, 10, 4], settings: node.params,
+            shape_fit: { axis: -1, input_width: 4, padded_width: 4, output_width: 4, units: 1, padding: 0, crop: 0 } },
+        } }))
+      }
+      return originalFetch(input, options)
+    }))
+    renderApp(); fireEvent.click(await screen.findByRole('button', { name: 'Clone to edit' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Add' }))
+    fireEvent.change(screen.getByLabelText('Insertion destination'), { target: { value: JSON.stringify(['input', 'linear', 'args/0']) } })
+    fireEvent.click(screen.getByTitle('Add HyperDense'))
+    const autoFit = await screen.findByRole('checkbox', { name: 'Auto-fit connection' })
+    expect(autoFit).toBeChecked()
+    expect(screen.queryByLabelText('units')).not.toBeInTheDocument()
+    await screen.findByText(/4 features → 4 padded → 4 output; 1 hypercomplex units/)
+    fireEvent.click(autoFit)
+    expect(await screen.findByLabelText('units')).toHaveValue('8')
+    await screen.findByText(/Node add_1: width 32 must match 4/)
+    expect(autoFit).toBeEnabled()
+    fireEvent.click(autoFit)
+    await screen.findByText(/4 features → 4 padded → 4 output; 1 hypercomplex units/)
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(autoFit).not.toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Redo' }))
+    expect(autoFit).toBeChecked()
+    fireEvent.click(screen.getByRole('tab', { name: 'Architecture' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save graph' }))
+    await waitFor(() => expect(saved).toHaveLength(1))
+    expect(saved[0].nodes.find((n: any) => n.kind === 'hyper_dense').params.shape_mode).toBe('preserve')
+  })
+  it('requires an insertion destination by default and offers disconnected drafts explicitly', async () => {
+    renderApp(); fireEvent.click(await screen.findByRole('button', { name: 'Clone to edit' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Add' }))
+    fireEvent.change(screen.getByLabelText('Search layer palette'), { target: { value: 'Dense' } })
+    expect(screen.getByTitle('Add Dense')).toBeDisabled()
+    fireEvent.click(screen.getByText('Advanced', { selector: 'summary' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create unconnected layer' }))
+    fireEvent.click(screen.getByTitle('Add Dense'))
+    expect(await screen.findByRole('button', { name: /^Select dense-/ })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Inspect' })).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Select dense-/ })).not.toBeInTheDocument())
+  })
+  it('replaces the selected layer from its type selector and restores the exact graph with undo', async () => {
+    const originalFetch = fetch, saved: any[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      if (String(input).endsWith('/architectures') && options?.body) {
+        const payload = JSON.parse(String(options.body)); saved.push(payload)
+        return new Response(JSON.stringify({ id: 'saved', spec: payload }))
+      }
+      return originalFetch(input, options)
+    }))
+    renderApp()
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand diagram Model core' }))
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Select linear' }))[0])
+    expect(screen.getByLabelText('Layer type')).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Clone to edit' }))
+    fireEvent.change(screen.getByLabelText('Layer type'), { target: { value: 'dropout' } })
+    await waitFor(() => expect(screen.getByLabelText('Layer type')).toHaveValue('dropout'))
+    expect(screen.queryByRole('button', { name: 'Replace selected' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Architecture' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save graph' }))
+    await waitFor(() => expect(saved).toHaveLength(1))
+    const replacement = saved[0].nodes[1]
+    expect(replacement).toMatchObject({ kind: 'dropout', group: 'core', params: { p: .1 } })
+    expect(saved[0].edges).toEqual([
+      { source: 'input', target: replacement.id, port: 'x' },
+      { source: replacement.id, target: 'output', port: 'args/0' },
+    ])
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save graph' }))
+    await waitFor(() => expect(saved).toHaveLength(2))
+    expect(saved[1].nodes).toEqual(executableGraph.nodes)
+    expect(saved[1].edges).toEqual(executableGraph.edges)
+    fireEvent.click(screen.getByRole('button', { name: 'Redo' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save graph' }))
+    await waitFor(() => expect(saved).toHaveLength(3))
+    expect(saved[2].nodes).toEqual(saved[0].nodes)
+    expect(saved[2].edges).toEqual(saved[0].edges)
+  })
+  it('reconnects with the input picker while rejecting cycles and preserving locked models', async () => {
+    renderApp()
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand diagram Model core' }))
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Select linear' }))[0])
+    fireEvent.click(screen.getByText('Input connections'))
+    const picker = screen.getByLabelText('Source for args/0')
+    expect(picker).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Clone to edit' }))
+    await waitFor(() => expect(picker).toBeEnabled())
+    fireEvent.change(picker, { target: { value: 'output' } })
+    expect(await screen.findByText(/This connection would create a cycle/)).toBeInTheDocument()
+    expect(picker).toHaveValue('input')
+    fireEvent.change(picker, { target: { value: '' } })
+    expect(picker).toHaveValue('')
+    fireEvent.change(picker, { target: { value: 'input' } })
+    expect(picker).toHaveValue('input')
+  })
   it('switches Dense to HyperDense directly and saves matched units and algebra', async () => {
     const originalFetch = fetch
     const saved: any[] = []
@@ -121,30 +295,33 @@ describe('graph-native playground', () => {
       return new Response(JSON.stringify(result))
     }))
     renderApp(); fireEvent.click(await screen.findByRole('button', { name: 'Clone to edit' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Expand' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Select linear' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand diagram Model core' }))
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Select linear' }))[0])
     const selector = await screen.findByRole('combobox', { name: 'Layer type' })
-    await waitFor(() => expect(selector).toBeEnabled())
+    await waitFor(() => expect(selector).toHaveValue('dense'))
+    await waitFor(() => expect(screen.getByRole('option', { name: 'HyperDense', exact: true })).toBeEnabled())
     fireEvent.change(selector, { target: { value: 'hyper_dense' } })
     await waitFor(() => expect(selector).toHaveValue('hyper_dense'))
     const algebra = screen.getByRole('combobox', { name: 'Algebra' })
     await waitFor(() => expect(algebra).toBeEnabled())
     fireEvent.change(algebra, { target: { value: 'cl11' } })
     await waitFor(() => expect(algebra).toHaveValue('cl11'))
-    fireEvent.click(screen.getByRole('button', { name: 'Save graph' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Architecture' })); fireEvent.click(screen.getByRole('button', { name: 'Save graph' }))
     await waitFor(() => expect(saved).toHaveLength(1))
     expect(saved[0].nodes.find((n: any) => n.id === 'linear').params).toEqual({ units: 8, bias: false, algebra: 'cl11' })
     expect(saved[0].edges).toEqual([{ source: 'input', target: 'linear', port: 'x' }, { source: 'linear', target: 'output', port: 'args/0' }])
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Inspect' }))
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Layer type' })).toHaveValue('dense'))
   })
   it('keeps the original layer when a direct swap is incompatible', async () => {
     renderApp(); fireEvent.click(await screen.findByRole('button', { name: 'Clone to edit' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Expand' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Select linear' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand diagram Model core' }))
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Select linear' }))[0])
     const selector = await screen.findByRole('combobox', { name: 'Layer type' })
-    await waitFor(() => expect(selector).toBeEnabled())
+    await waitFor(() => expect(selector).toHaveValue('dense'))
+    await waitFor(() => expect(screen.getByRole('option', { name: 'HyperDense', exact: true })).toBeEnabled())
     fireEvent.change(selector, { target: { value: 'hyper_dense' } })
     expect(await screen.findByText(/must both be divisible by 4/)).toBeVisible()
     expect(selector).toHaveValue('dense')
@@ -160,39 +337,27 @@ describe('graph-native playground', () => {
       return new Response(JSON.stringify(result))
     }))
     renderApp(); fireEvent.click(await screen.findByRole('button', { name: 'Clone to edit' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Run' }))
     fireEvent.click(screen.getByText('Evaluation settings'))
     fireEvent.change(screen.getByLabelText('Cells (window/horizon)'), { target: { value: '10/1, 10/3' } })
-    fireEvent.click(await screen.findByRole('button', { name: 'Expand' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Select linear' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand diagram Model core' }))
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Select linear' }))[0])
     const selector = await screen.findByRole('combobox', { name: 'Layer type' })
-    await waitFor(() => expect(selector).toBeEnabled())
+    await waitFor(() => expect(selector).toHaveValue('dense'))
+    await waitFor(() => expect(screen.getByRole('option', { name: 'HyperDense', exact: true })).toBeEnabled())
     fireEvent.change(selector, { target: { value: 'hyper_dense' } })
     expect(await screen.findByText(/Original layer kept/)).toBeVisible()
     expect(selector).toHaveValue('dense')
   })
-  it('keeps advanced tools and the layer palette out of the initial workspace', async () => {
-    renderApp()
-    await screen.findByRole('button', { name: 'Clone to edit' })
+  it('organizes the sidebar into architecture, inspection, add and run sections', async () => {
+    renderApp(); await screen.findByRole('button', { name: 'Clone to edit' })
     expect(screen.getByRole('combobox', { name: 'Load graph preset' })).toHaveValue('paper-quaternion')
-    expect(screen.getByRole('group', { name: 'Paper baselines' })).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: 'Load saved graph' })).not.toBeVisible()
-    fireEvent.click(screen.getByText('Open saved'))
-    expect(screen.getByRole('combobox', { name: 'Load saved graph' })).toBeDisabled()
-    fireEvent.click(screen.getByText('Open saved'))
-    expect(screen.getByText('2. Edit architecture')).toBeVisible()
-    expect(screen.getByText('3. Run experiment')).toBeVisible()
-    expect(screen.queryByRole('button', { name: 'Share selected weights' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Export YAML' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('combobox', { name: 'Operation' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Add layers' }))
-    expect(screen.getByRole('combobox', { name: 'Operation' })).toBeVisible()
+    expect(screen.getAllByRole('tab')).toHaveLength(4)
+    fireEvent.click(screen.getByRole('tab', { name: 'Add' }))
+    expect(screen.getByRole('textbox', { name: 'Search layer palette' })).toBeVisible()
     expect(screen.queryByRole('textbox', { name: 'Search layers' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Layer settings' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Replace selected' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /^Layers$/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Architecture' }))
     expect(screen.getByRole('textbox', { name: 'Search layers' })).toBeVisible()
-    expect(screen.queryByRole('combobox', { name: 'Operation' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Advanced tools' }))
     expect(screen.getByRole('button', { name: 'Export YAML' })).toBeVisible()
   })
   it('edits actual layers on the same canvas and saves the executable graph', async () => {
@@ -205,19 +370,19 @@ describe('graph-native playground', () => {
     }))
     renderApp()
     fireEvent.click(await screen.findByRole('button', { name: 'Clone to edit' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Expand' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Select linear' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Expand diagram Model core' }))
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Select linear' }))[0])
     const width = await screen.findByRole('textbox', { name: 'out_features' })
     fireEvent.change(width, { target: { value: '64' } }); fireEvent.blur(width)
     await waitFor(() => expect(requests.some(r => r.path.endsWith('/validate') && r.body.architecture.nodes.some((n: any) => n.params.out_features === 64))).toBe(true))
-    expect(screen.getAllByTestId('flow')).toHaveLength(1)
+    expect(screen.getAllByTestId('diagram')).toHaveLength(1)
     expect(requests.some(r => r.path.includes('internal-graph'))).toBe(false)
-    fireEvent.click(screen.getByRole('button', { name: 'Save graph' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Architecture' })); fireEvent.click(screen.getByRole('button', { name: 'Save graph' }))
     await waitFor(() => expect(requests.some(r => r.path.endsWith('/architectures') && r.body.schema_version === 2 && r.body.view)).toBe(true))
   })
   it('preserves edits across navigation and supports undo and library loading', async () => {
     renderApp(); fireEvent.click(await screen.findByRole('button', { name: 'Clone to edit' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Graph name' }), { target: { value: 'My experiment' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Graph name' }), { target: { value: 'My experiment' } }); fireEvent.blur(screen.getByRole('textbox', { name: 'Graph name' }))
     fireEvent.click(screen.getByRole('button', { name: /^Runs/ })); fireEvent.click(screen.getByRole('button', { name: /^Builder$/ }))
     expect(screen.getByRole('textbox', { name: 'Graph name' })).toHaveValue('My experiment')
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
@@ -233,7 +398,9 @@ describe('graph-native playground', () => {
       return originalFetch(input, options)
     }))
     renderApp(); await screen.findByRole('button', { name: 'Clone to edit' })
+    fireEvent.click(screen.getByRole('tab', { name: 'Run' }))
     await waitFor(() => expect(screen.getByRole('button', { name: /run validation/i })).toBeEnabled())
+    fireEvent.click(screen.getByRole('tab', { name: 'Run' }))
     fireEvent.click(screen.getByText('Evaluation settings'))
     fireEvent.change(screen.getByLabelText('Cells (window/horizon)'), { target: { value: '10/1, 10/3' } })
     await screen.findByText(/Output shape mismatch/)
@@ -241,6 +408,7 @@ describe('graph-native playground', () => {
   })
   it('retains local and Modal execution controls', async () => {
     renderApp()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Run' }))
     const method = await screen.findByRole('combobox', { name: /run method/i })
     expect(method).toHaveValue('local')
     fireEvent.change(method, { target: { value: 'modal' } })
@@ -250,6 +418,7 @@ describe('graph-native playground', () => {
   })
   it('offers valid GCP GPU counts and resets count when changing GPU', async () => {
     renderApp()
+    fireEvent.click(await screen.findByRole('tab', { name: 'Run' }))
     fireEvent.change(await screen.findByRole('combobox', { name: /run method/i }), { target: { value: 'gcp' } })
     const gpu = await screen.findByRole('combobox', { name: 'GCP GPU' })
     const count = screen.getByRole('combobox', { name: 'GCP GPU count' })

@@ -1,0 +1,25 @@
+/* Hypercast identity: navy wordmark, cyan signal, violet hypercomplex layers. */
+.brand { flex-direction: column; align-items: flex-start; gap: 0; flex-shrink: 0; }
+.brand-logo { display: block; width: 204px; height: auto; aspect-ratio: 2076 / 436; overflow: hidden; }
+.brand small { margin: 0 0 0 70px; font-size: 9px; line-height: 12px; letter-spacing: .025em; white-space: nowrap; }
+.loading-logo { width: min(320px, 75vw); margin-bottom: 12px; }
+.unified-workspace .app-header { border-bottom-color: var(--line); }
+.unified-workspace .app-header::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--brand-navy), var(--brand-cyan) 52%, var(--brand-violet)); opacity: .55; pointer-events: none; }
+.unified-workspace .app-header nav { padding: 4px; background: var(--surface-soft); border: 1px solid var(--line); }
+.unified-workspace .app-header nav button.active { color: white; background: var(--brand-navy); }
+.unified-workspace .app-header nav button:hover:not(.active) { color: var(--brand-navy); background: var(--surface-raised); }
+input[type=checkbox], input[type=radio] { accent-color: var(--brand-violet); }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline-color: var(--brand-violet); }
+.architecture-node.is-selected { border-color: var(--brand-violet); box-shadow: 0 0 0 2px #6b3eda25, 0 5px 18px #0114760a; background: #fdfcff; }
+.architecture-node:focus-visible { outline-color: var(--brand-violet); }
+.node-workspace .node-insert:hover { background: var(--brand-violet-soft); color: var(--brand-violet); border-color: var(--brand-violet); }
+.workspace-sidebar button:hover:not(:disabled) { background: var(--surface-soft); border-color: #a4b2d5; }
+.workspace-sidebar button[aria-pressed=true] { background: var(--brand-violet-soft); border-color: #b29ae9; color: #5129ae; }
+.workspace-sidebar .primary-button:hover:not(:disabled), .workspace-sidebar .primary-action:hover:not(:disabled) { color: white; background: var(--accent-strong); border-color: var(--accent-strong); }
+@media (max-width: 800px) {
+  .brand-logo { width: 170px; }
+  .brand small { display: none; }
+}
+@media (max-width: 430px) {
+  .brand-logo { width: 145px; }
+}

@@ -41,5 +41,8 @@ def test_modal_payload_produces_standard_playground_artifacts(tmp_path: Path) ->
         "summary.csv",
         "predictions.csv",
         "diagnostics.json",
+        "learning_curves.csv",
+        "runtime.json",
+        "weights.json",
     }
     assert "Validation complete" in result["log"]

@@ -20,7 +20,9 @@ except ImportError:  # pragma: no cover - exercised through capability checks
     modal = None
 
 
-RESULT_FILES = ("runs.csv", "per_lead.csv", "summary.json", "summary.csv", "predictions.csv", "diagnostics.json")
+RESULT_FILES = ("runs.csv", "per_lead.csv", "summary.json", "summary.csv", "predictions.csv", "diagnostics.json", "weights.json",
+                "initialization.json", "learning_curves.csv", "preflight.json", "runtime.json", "split_audit.json",
+                "batch-manifest.json", "batch-artifacts.tar.gz")
 
 
 def _atomic_bytes(path: Path, contents: bytes) -> None:
@@ -63,6 +65,10 @@ def _execute_payload(
         )
 
         output = io.StringIO()
+        import time
+        import platform
+        from importlib.metadata import version
+        runtime_start = time.perf_counter()
         previous_directory = Path.cwd()
         ok = True
         error_message: str | None = None
@@ -84,6 +90,12 @@ def _execute_payload(
             traceback.print_exc(file=output)
         finally:
             os.chdir(previous_directory)
+
+        (job_dir / "runtime.json").write_text(json.dumps({
+            "python": platform.python_version(), "actual_gpu": actual_gpu,
+            "remote_elapsed_seconds": time.perf_counter() - runtime_start,
+            "packages": {name: version(name) for name in ("torch", "numpy", "pandas", "scipy", "einops", "openpyxl")},
+        }), encoding="utf-8")
 
         status_path = job_dir / "status.json"
         status = (
@@ -110,12 +122,12 @@ if modal is not None:
     image = (
         modal.Image.debian_slim(python_version="3.12")
         .pip_install(
-            "einops>=0.8,<1",
-            "scipy>=1.13,<2",
-            "numpy>=1.26",
-            "openpyxl>=3.1",
-            "pandas>=2.1",
-            "torch>=2.2",
+            "einops==0.8.2",
+            "scipy==1.18.1",
+            "numpy==2.5.3",
+            "openpyxl==3.1.5",
+            "pandas==3.0.5",
+            "torch==2.14.0",
         )
         .add_local_python_source("hypercast4d")
     )
@@ -161,6 +173,7 @@ def run_modal_job(job_dir: Path) -> None:
     total = len(evaluation["cells"]) * len(evaluation["seeds"])
     if request.get("phase", "validation") == "validation":
         total *= len(evaluation["folds"])
+        total *= 8 if evaluation.get('remaining_replication') else 16 if evaluation.get('remaining_tuning') else 1
     _status(
         job_dir,
         state="running",
@@ -183,7 +196,12 @@ def run_modal_job(job_dir: Path) -> None:
     try:
         with modal.enable_output():
             with app.run():
-                function_call = execute_remote.with_options(gpu=gpu).spawn(
+                function_call = execute_remote.with_options(
+                    gpu=gpu,
+                    timeout=execution.get("timeout_seconds", 24 * 60 * 60),
+                    retries=0,
+                    max_containers=1,
+                ).spawn(
                     request_path.read_text(encoding="utf-8"),
                     dataset,
                     parent_runs,
@@ -193,6 +211,8 @@ def run_modal_job(job_dir: Path) -> None:
                     job_dir,
                     modal_call_id=function_call.object_id,
                     modal_dashboard_url=dashboard_url,
+                    modal_timeout_seconds=execution.get("timeout_seconds", 24 * 60 * 60),
+                    modal_image_id=image.object_id,
                 )
                 print(f"Modal call: {function_call.object_id}", flush=True)
                 if dashboard_url:
@@ -222,7 +242,8 @@ def run_modal_job(job_dir: Path) -> None:
         )
         return
     error_message = str(result.get("error") or "Modal worker failed")
-    _status(job_dir, state="failed", error=error_message, current=None)
+    _status(job_dir, state="failed", error=error_message, current=None,
+            completed=int(remote_status.get('completed', 0)), total=int(remote_status.get('total', total)))
     raise RuntimeError(error_message)
 
 

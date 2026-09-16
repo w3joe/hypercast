@@ -1,0 +1,88 @@
+{
+  "passed": true,
+  "configurations": [
+    {
+      "variant": "native",
+      "selected_parameters": 2097152,
+      "whole_model_parameters": 6292113,
+      "untouched_sha256": "efdf996766c7932a975eb7285b34acf2101faa306e40e68a2c420cfffe1f0c8c",
+      "cpu_forward_backward": "passed"
+    },
+    {
+      "variant": "real",
+      "selected_parameters": 4194304,
+      "whole_model_parameters": 8389265,
+      "untouched_sha256": "efdf996766c7932a975eb7285b34acf2101faa306e40e68a2c420cfffe1f0c8c",
+      "cpu_forward_backward": "passed"
+    },
+    {
+      "variant": "complex",
+      "selected_parameters": 2097152,
+      "whole_model_parameters": 6292113,
+      "untouched_sha256": "efdf996766c7932a975eb7285b34acf2101faa306e40e68a2c420cfffe1f0c8c",
+      "cpu_forward_backward": "passed"
+    },
+    {
+      "variant": "quaternion",
+      "selected_parameters": 1048576,
+      "whole_model_parameters": 5243537,
+      "untouched_sha256": "efdf996766c7932a975eb7285b34acf2101faa306e40e68a2c420cfffe1f0c8c",
+      "cpu_forward_backward": "passed"
+    },
+    {
+      "variant": "octonion",
+      "selected_parameters": 524288,
+      "whole_model_parameters": 4719249,
+      "untouched_sha256": "efdf996766c7932a975eb7285b34acf2101faa306e40e68a2c420cfffe1f0c8c",
+      "cpu_forward_backward": "passed"
+    },
+    {
+      "variant": "lowrank2",
+      "selected_parameters": 2097152,
+      "whole_model_parameters": 6292113,
+      "untouched_sha256": "efdf996766c7932a975eb7285b34acf2101faa306e40e68a2c420cfffe1f0c8c",
+      "cpu_forward_backward": "passed"
+    },
+    {
+      "variant": "lowrank4",
+      "selected_parameters": 1048576,
+      "whole_model_parameters": 5243537,
+      "untouched_sha256": "efdf996766c7932a975eb7285b34acf2101faa306e40e68a2c420cfffe1f0c8c",
+      "cpu_forward_backward": "passed"
+    },
+    {
+      "variant": "lowrank8",
+      "selected_parameters": 524288,
+      "whole_model_parameters": 4719249,
+      "untouched_sha256": "efdf996766c7932a975eb7285b34acf2101faa306e40e68a2c420cfffe1f0c8c",
+      "cpu_forward_backward": "passed"
+    }
+  ],
+  "equivalence": [
+    {
+      "training": false,
+      "forward_gradients_and_adam": "passed"
+    },
+    {
+      "training": true,
+      "forward_gradients_and_adam": "passed"
+    }
+  ],
+  "site": "layers.0.model.spec_conv_1.0",
+  "real_dimensions_per_frequency": [
+    512,
+    512
+  ],
+  "frequency_maps": 16,
+  "bias": false,
+  "hypothesis": "Structured replacement of first-scale native complex spectral maps; distinct from ordinary dense substitution",
+  "native_is_already_complex": true,
+  "component_layout": "256 real coordinates followed by 256 imaginary coordinates",
+  "pending": [
+    "CUDA gates",
+    "independent structured spectral checks",
+    "versioned initialization integration",
+    "costed admission"
+  ],
+  "cloud_ready": false
+}

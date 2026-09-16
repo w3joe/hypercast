@@ -1,4 +1,4 @@
-# HyperCast4D
+# Hypercast
 
 The architecture playground includes a [paper-linked method collection](docs/method_collection.md)
 with 52 entries and 15 runnable TSLib-core adaptations, plus three lightweight
@@ -6,7 +6,7 @@ mechanism-inspired templates. Full implementation of the collection is still
 incomplete; see [method coverage](docs/method_collection.md).
 Find it under **Builder → Method library**.
 
-HyperCast4D is a runnable, clean-room evaluation of the paper
+Hypercast is a runnable, clean-room evaluation of the paper
 [*4D hypercomplex-valued neural network in multivariate time series
 forecasting*](https://doi.org/10.1038/s41598-025-08957-5).
 
@@ -222,7 +222,7 @@ configuration includes only the input order whose executable code was released.
 
 ## Architecture playground and live results
 
-HyperCast4D includes a local visual workbench for composing neural networks,
+Hypercast includes a local visual workbench for composing neural networks,
 running validation experiments, and comparing MAE/MSE against persistence. Run:
 
 ```bash
@@ -232,7 +232,7 @@ hypercast4d-playground
 It opens `http://127.0.0.1:8765`. The existing `hypercast4d-dashboard`
 command is retained as an alias. The workbench provides:
 
-- a drag-and-drop sequential architecture builder with live tensor shapes;
+- a node-based architecture editor with expandable stages, guided editing, and validated tensor shapes;
 - paper CNN, LSTM, Quaternion, Coquaternion, and `Cl(1,1)` presets;
 - causal CNN, residual TCN, GRU, LSTM, HyperDense, pooling, normalization,
   activation, dropout, and dense blocks;
@@ -279,6 +279,13 @@ GCP GPU VMs are also available from **Run on → GCP · GPU VM**, with L4
 cell/seed trials concurrently, not a single distributed model. An existing GCP
 project, private bucket/network, service account and prepared CUDA image are
 required. See [GCP setup, costs and cleanup](docs/gcp_gpu.md) before launching.
+
+### Command-line model editing and experiments
+
+The `hypercast` CLI creates and edits pipeline/graph model files, runs individual
+experiments locally or on Modal/GCP, and shares saved architectures and results
+with the playground. No browser is required. See the [CLI guide](docs/cli.md) for
+HyperDense input examples, internal-layer edits, dry-runs and job management.
 
 ### Local or Modal GPU execution
 
@@ -409,7 +416,7 @@ training, so the following data appears live:
 - the model, window, horizon, seed, and effective model configuration;
 - HParams entries for comparing completed runs.
 
-TensorBoard is intended for training diagnostics. The built-in HyperCast4D
+TensorBoard is intended for training diagnostics. The built-in Hypercast
 dashboard remains the simpler view for overall progress and final MAE bars.
 Generated TensorBoard logs are ignored by Git. To disable logging or change its
 location, edit the `tensorboard` section of your copied configuration.
@@ -600,7 +607,7 @@ the supplementary ZIP linked from the
 [Scientific Reports article](https://www.nature.com/articles/s41598-025-08957-5).
 The downloader in this repository retrieves that ZIP.
 
-HyperCast4D does not copy KHNN or the supplementary source code. Its PyTorch
+Hypercast does not copy KHNN or the supplementary source code. Its PyTorch
 layer was independently implemented from the paper's multiplication tables and
 checked against the archived block-matrix convention.
 
@@ -652,7 +659,7 @@ Inspection of the paper's supplementary notebook found several issues:
 - Failure to reject equal performance is treated as evidence of equivalence,
   without a dedicated equivalence test.
 
-HyperCast4D therefore uses a corrected `chronological-v1` protocol: scaling is
+Hypercast therefore uses a corrected `chronological-v1` protocol: scaling is
 fitted only on training rows, target windows cannot cross split boundaries, and
 the final test partition remains untouched during training and model selection.
 This intentionally differs from the paper's evaluation protocol while keeping

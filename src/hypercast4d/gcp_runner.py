@@ -17,7 +17,7 @@ from .gcp_compute import gcp_config
 from .playground_runner import _status, normalize_evaluation
 
 RESULT_FILES = ("runs.csv", "per_lead.csv", "summary.json", "summary.csv",
-                "predictions.csv", "diagnostics.json", "status.json", "training.log")
+                "predictions.csv", "diagnostics.json", "weights.json", "status.json", "training.log")
 
 
 def cloud(*args: str, timeout: int = 120, check: bool = True) -> subprocess.CompletedProcess:
@@ -105,7 +105,7 @@ def collect_result(archive_path: Path, job_dir: Path) -> None:
                     (job_dir / filename).write_bytes(archive.read(name))
         if archive.read("job/exit-code").strip() != b"0":
             raise RuntimeError("GCP worker failed; see training log")
-        if not all(f"job/{name}" in archive.namelist() for name in RESULT_FILES):
+        if not all(f"job/{name}" in archive.namelist() for name in RESULT_FILES if name != 'weights.json'):
             raise RuntimeError("GCP returned incomplete results")
 
 

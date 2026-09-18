@@ -32,6 +32,22 @@ const manifest = {
   } } },
 }
 
+const archivedResults = {
+  schema_version: 1,
+  source: 'tslib15-20260915',
+  result_count: 120,
+  fit_count: 360,
+  results: Array.from({ length: 120 }, (_, index) => ({
+    id: `archive-${index}`,
+    request: { evaluation: {} },
+    status: { state: 'complete', architecture_name: `Archived ${index}` },
+    summary: [],
+    runs: [{ seed: 1 }, { seed: 2 }, { seed: 3 }],
+    per_lead: [],
+    archive: { source: 'tslib15-20260915' },
+  })),
+}
+
 beforeEach(() => {
   const values = new Map<string, string>()
   vi.stubGlobal('localStorage', {
@@ -72,12 +88,16 @@ describe('offline API', () => {
   })
 
   it('rejects compute actions with an offline explanation', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (path: RequestInfo | URL) => {
+      expect(String(path)).toBe('/offline-results.json')
+      return new Response(JSON.stringify(archivedResults), { status: 200 })
+    }))
     await expect(offlineApi.submit()).rejects.toThrow(/no compute connection/i)
     await expect(offlineApi.previewWeights()).rejects.toThrow(/no compute connection/i)
     const examples = await offlineApi.jobs()
-    expect(examples).toHaveLength(4)
+    expect(examples).toHaveLength(120)
     expect(examples.every(job => job.status.state === 'complete')).toBe(true)
-    expect(examples.every(job => job.runs.length === 6)).toBe(true)
+    expect(examples.reduce((total, job) => total + job.runs.length, 0)).toBe(360)
     await expect(offlineApi.comparisonArchives()).resolves.toEqual([])
   })
 })

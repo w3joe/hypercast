@@ -1,7 +1,7 @@
 import { prepareDenseSwap } from './layerSwap'
-import { offlineExampleJobs } from './offlineExamples'
 import type {
   ArchitectureSpec,
+  ArchivedComparisonJob,
   Catalog,
   GraphNodeInfo,
   GraphRecord,
@@ -28,6 +28,7 @@ type OfflineManifest = {
 const STORAGE_KEY = 'hypercast.offline.graphs.v1'
 const MAX_RECORDS = 5
 let manifestPromise: Promise<OfflineManifest> | undefined
+let resultsPromise: Promise<ArchivedComparisonJob[]> | undefined
 
 function unavailable(): never {
   throw new Error('This browser-only playground has no compute connection. Export the architecture and open it in a connected Hypercast installation to run it.')
@@ -39,6 +40,18 @@ function manifest() {
     return response.json() as Promise<OfflineManifest>
   })
   return manifestPromise
+}
+
+function archivedResults() {
+  resultsPromise ??= fetch('/offline-results.json', { cache: 'force-cache' }).then(async response => {
+    if (!response.ok) throw new Error('The read-only research results could not be loaded.')
+    const data = await response.json() as { schema_version: number; result_count: number; fit_count: number; results: ArchivedComparisonJob[] }
+    if (data.schema_version !== 1 || data.result_count !== 120 || data.fit_count !== 360 || data.results.length !== data.result_count) {
+      throw new Error('The deployed research archive is incomplete.')
+    }
+    return data.results
+  })
+  return resultsPromise
 }
 
 function assertGraph(value: ArchitectureSpec | GraphSpec): GraphSpec {
@@ -170,7 +183,7 @@ export const offlineApi = {
     const info = referenceMetadata(data, graph)
     return { spec: prepareDenseSwap(graph, edit.id, edit.kind as 'dense' | 'hyper_dense', info, String(edit.params.algebra ?? 'quaternion')), warnings: [] }
   },
-  jobs: async () => structuredClone(offlineExampleJobs),
+  jobs: async () => structuredClone(await archivedResults()),
   legacyRuns: async () => [],
   comparisonArchives: async () => [],
   architectures: async () => [],
@@ -194,4 +207,5 @@ export const offlineApi = {
 
 export function resetOfflineApiForTests() {
   manifestPromise = undefined
+  resultsPromise = undefined
 }

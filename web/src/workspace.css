@@ -171,6 +171,13 @@
 .compare-variant-filter select { border: 1px solid #d6dfe4; background: #fafcfd; border-radius: 6px; padding: 7px 10px; color: #405964; }
 .comparison-archive-note { color: #657c80; font-size: 12px; line-height: 1.7; margin: -8px 0 20px; }
 .parameter-tradeoff { grid-column: 1 / -1; min-width: 0; }
+.parameter-chart-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.parameter-chart-heading > div:first-child { min-width: 0; }
+.chart-scale-controls { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; padding: 3px; border: 1px solid #d9e2e5; border-radius: 8px; background: #f6f9f9; }
+.chart-scale-controls > span { padding: 0 6px; color: #718086; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.chart-scale-controls button { min-height: 28px; padding: 4px 9px; border: 0; border-radius: 5px; background: transparent; color: #52646b; font-size: 11px; font-weight: 650; }
+.chart-scale-controls button:hover { background: #eaf2f3; color: #18323b; }
+.chart-scale-controls button.active { background: #fff; color: #011476; box-shadow: 0 1px 4px rgba(20, 49, 60, .14); }
 .parameter-plot-scroll { overflow-x: auto; }
 .parameter-plot { display: block; width: 100%; max-width: 980px; min-width: 520px; margin: auto; }
 .parameter-axis-label { fill: #52676e; font-size: 12px; }
@@ -182,4 +189,5 @@
 .parameter-readout { min-height: 74px; display: flex; align-items: center; flex-wrap: wrap; gap: 7px 22px; padding: 14px 18px; border-radius: 8px; background: #f4f5f8; border: 1px solid #e1e3ea; color: #64777b; font-size: 12px; line-height: 1.6; }
 .parameter-readout strong { flex-basis: 100%; font-size: 13px; }
 .parameter-readout b { color: #334f53; font-weight: 600; }
+@media (max-width: 680px) { .parameter-chart-heading { display: block; } .chart-scale-controls { margin: 4px 0 14px; } }
 @media (max-width: 600px) { .parameter-legend { justify-content: flex-start; gap: 6px 12px; } .parameter-readout { padding: 12px; gap: 5px 14px; } }

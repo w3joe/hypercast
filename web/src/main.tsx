@@ -17,7 +17,7 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      {import.meta.env.VITE_PUBLIC_DEMO === 'true' ? <DemoGate><App /></DemoGate> : <App />}
+      {import.meta.env.VITE_PUBLIC_DEMO === 'true' && import.meta.env.VITE_OFFLINE_DEMO !== 'true' ? <DemoGate><App /></DemoGate> : <App />}
     </QueryClientProvider>
   </StrictMode>,
 )

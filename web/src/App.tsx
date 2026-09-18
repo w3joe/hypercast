@@ -8,7 +8,7 @@ import { WorkspacePanels, SidePanel } from './WorkspacePanels'
 import GraphBuilder from './GraphBuilder'
 import BrandLogo from './BrandLogo'
 import { ErrorNotice } from './BuilderControls'
-import { api } from './api'
+import { api, isOfflineDemo } from './api'
 import type { Job } from './types'
 
 type View = 'builder' | 'runs' | 'compare'
@@ -76,9 +76,9 @@ export default function App() {
   const [runId, setRunId] = useState('')
   const [runState, setRunState] = useState('all')
   const catalog = useQuery({ queryKey: ['catalog'], queryFn: api.catalog, staleTime: Infinity })
-  const jobs = useQuery({ queryKey: ['jobs'], queryFn: api.jobs, refetchInterval: 1500 })
-  const archives = useQuery({ queryKey: ['comparison-archives'], queryFn: api.comparisonArchives, enabled: view === 'compare', staleTime: 60000 })
-  const legacyRuns = useQuery({ queryKey: ['legacy-runs'], queryFn: api.legacyRuns, staleTime: 5000 })
+  const jobs = useQuery({ queryKey: ['jobs'], queryFn: api.jobs, enabled: !isOfflineDemo, refetchInterval: isOfflineDemo ? false : 1500 })
+  const archives = useQuery({ queryKey: ['comparison-archives'], queryFn: api.comparisonArchives, enabled: !isOfflineDemo && view === 'compare', staleTime: 60000 })
+  const legacyRuns = useQuery({ queryKey: ['legacy-runs'], queryFn: api.legacyRuns, enabled: !isOfflineDemo, staleTime: 5000 })
   const activeCount = useMemo(() => (jobs.data ?? []).filter((job) => ['queued', 'starting', 'running'].includes(job.status.state)).length, [jobs.data])
   if (catalog.isLoading) return <div className="app-loading"><BrandLogo className="loading-logo" /><p>Loading architecture catalog…</p></div>
   if (catalog.error || !catalog.data) return <div className="app-loading"><ErrorNotice error={catalog.error ?? new Error('Catalog unavailable')} /></div>
@@ -92,9 +92,10 @@ export default function App() {
         <button className="brand" aria-label="Hypercast Architecture Playground" onClick={() => setView('builder')}><BrandLogo /><small>Architecture Playground</small></button>
         <nav aria-label="Primary navigation">
           <button className={view === 'builder' ? 'active' : ''} onClick={() => setView('builder')}><Blocks size={16} />Builder</button>
-          <button className={view === 'runs' ? 'active' : ''} onClick={() => setView('runs')}><Clock3 size={16} />Runs{activeCount > 0 && <span className="nav-count">{activeCount}</span>}</button>
-          <button className={view === 'compare' ? 'active' : ''} onClick={() => setView('compare')}><BarChart3 size={16} />Compare</button>
+          {!isOfflineDemo && <button className={view === 'runs' ? 'active' : ''} onClick={() => setView('runs')}><Clock3 size={16} />Runs{activeCount > 0 && <span className="nav-count">{activeCount}</span>}</button>}
+          {!isOfflineDemo && <button className={view === 'compare' ? 'active' : ''} onClick={() => setView('compare')}><BarChart3 size={16} />Compare</button>}
         </nav>
+        {isOfflineDemo && <span className="offline-badge">Browser playground</span>}
         <div ref={setToolbar} className="topbar-tools">{view === 'runs' && <label className="topbar-single-picker"><span>Run</span><select aria-label="Select run" value={runId} onChange={e => setRunId(e.target.value)}><option value="">All runs</option>{(jobs.data ?? []).map(j => <option key={j.id} value={j.id}>{j.status.architecture_name} · {j.id.slice(-8)}</option>)}</select></label>}</div>
       </header>
       <div className="workspace-body">

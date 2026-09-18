@@ -308,14 +308,14 @@ describe('graph-native playground', () => {
     await waitFor(() => expect(algebra).toHaveValue('cl11'))
     fireEvent.click(screen.getByRole('tab', { name: 'Architecture' })); fireEvent.click(screen.getByRole('button', { name: 'Save graph' }))
     await waitFor(() => expect(saved).toHaveLength(1))
-    expect(saved[0].nodes.find((n: any) => n.id === 'linear').params).toEqual({ units: 8, bias: false, algebra: 'cl11' })
+    expect(saved[0].nodes.find((n: any) => n.id === 'linear').params).toEqual({ units: 8, bias: false, algebra: 'cl11', shape_mode: 'preserve' })
     expect(saved[0].edges).toEqual([{ source: 'input', target: 'linear', port: 'x' }, { source: 'linear', target: 'output', port: 'args/0' }])
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Inspect' }))
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Layer type' })).toHaveValue('dense'))
   })
-  it('keeps the original layer when a direct swap is incompatible', async () => {
+  it('auto-fits a direct swap whose real widths are not algebra-divisible', async () => {
     renderApp(); fireEvent.click(await screen.findByRole('button', { name: 'Clone to edit' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Expand diagram Model core' }))
     fireEvent.click((await screen.findAllByRole('button', { name: 'Select linear' }))[0])
@@ -323,8 +323,8 @@ describe('graph-native playground', () => {
     await waitFor(() => expect(selector).toHaveValue('dense'))
     await waitFor(() => expect(screen.getByRole('option', { name: 'HyperDense', exact: true })).toBeEnabled())
     fireEvent.change(selector, { target: { value: 'hyper_dense' } })
-    expect(await screen.findByText(/must both be divisible by 4/)).toBeVisible()
-    expect(selector).toHaveValue('dense')
+    await waitFor(() => expect(selector).toHaveValue('hyper_dense'))
+    expect(screen.getByRole('checkbox', { name: 'Auto-fit connection' })).toBeChecked()
   })
   it('does not apply a swap that changes the layer shape in another evaluation cell', async () => {
     const originalFetch = fetch

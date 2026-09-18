@@ -111,6 +111,13 @@
 }
 @media (prefers-reduced-motion: reduce) { .unified-workspace *, .unified-workspace *::before, .unified-workspace *::after { animation: none !important; transition: none !important; } }
 
+.offline-badge { justify-self: end; border: 1px solid #00a5c7; border-radius: 999px; padding: 6px 10px; color: #005f76; background: #e8fbff; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.offline-builder-note { display: grid; gap: 3px; margin: 12px 0 8px; padding: 10px 12px; border-left: 3px solid #09a9c6; background: #effbfc; color: #526a72; font-size: 11px; line-height: 1.45; }
+.offline-builder-note strong { color: #075e70; font-size: 12px; }
+.offline-run-note { padding: 14px; border: 1px solid #c9e9ee; border-radius: 9px; background: #f4fcfd; }
+.offline-run-note p { margin-top: 0; color: #536c74; font-size: 12px; line-height: 1.6; }
+@media (max-width: 800px) { .offline-badge { display: none; } }
+
 /* Compare: three primary plots, one optional forecast, and numeric tables. */
 .simplified-comparison { max-width: 1600px; margin-inline: auto; width: 100%; }
 .comparison-cell-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

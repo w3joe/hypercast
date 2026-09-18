@@ -89,12 +89,14 @@ export function RunControls({
   disabled,
   onQueued,
   demo,
+  offline = false,
 }: {
   architecture: ArchitectureSpec | GraphSpec
   evaluation: EvaluationSpec
   disabled: boolean
   onQueued: (job: Job) => void
   demo?: DemoLimits
+  offline?: boolean
 }) {
   const queryClient = useQueryClient()
   const [target, setTarget] = useState<ExecutionSpec['target']>('local')
@@ -104,7 +106,7 @@ export function RunControls({
   const compute = useQuery({
     queryKey: ['compute-capabilities'],
     queryFn: api.compute,
-    enabled: !demo && target !== 'local',
+    enabled: !offline && !demo && target !== 'local',
     staleTime: 10_000,
   })
   const mutation = useMutation({
@@ -127,6 +129,11 @@ export function RunControls({
     : target === 'gcp' ? { target: 'gcp', gpu: gcpGpu, gpu_count: gpuCount }
     : { target: 'local', gpu: null }
   const canSubmit = target === 'local' || Boolean(target === 'gcp' ? gcp?.available : modal?.available)
+
+  if (offline) return <div className="run-control-stack offline-run-note">
+    <p>Training is unavailable in this browser playground. Export the YAML and open it in a connected Hypercast installation to validate shapes, inspect weights, and run experiments.</p>
+    <button className="primary-button" disabled><Play size={15} />Compute not connected</button>
+  </div>
 
   if (demo) return <div className="run-control-stack">
     <p className="demo-run-note">L4 demo · up to {demo.run_seconds / 60} minutes · {session.data?.remaining_runs ?? '…'} runs left today (UTC). Failed and cancelled experiments count toward your allowance.</p>

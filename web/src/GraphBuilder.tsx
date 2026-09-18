@@ -29,6 +29,7 @@ const extras = [
 const allowed = new Set(['dense', 'activation', 'dropout', 'flatten', 'mean_pool', 'last_state', 'layer_norm', 'causal_conv', 'tcn', 'gru', 'lstm', 'hyper_dense'])
 
 export default function GraphBuilder({ catalog, active = true }: { catalog: Catalog; active?: boolean }) {
+  const offline = Boolean(catalog.offline)
   const diagram = useRef<DiagramHandle>(null)
   const workspace = useWorkspacePanels()
   const revealPanel = () => {
@@ -112,7 +113,7 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
       setScene({ blocks: [], routes: [], width: 400, height: 300 })
       setSnapshot({ graph: next, view }); setLoadKey(key => key + 1)
       setSavedId(spec.schema_version === 2 ? record?.id : undefined)
-      setMetadata(description.graph_nodes ?? {}); setValidatedGraph(null); setSelected([]); setSelectedEdge(null); setPanel('architecture'); setWeightsOpen(false); setMoveId(null)
+      setMetadata(description.graph_nodes ?? {}); setValidatedGraph(offline && description.reference ? next : null); setParameters(description.parameters ?? null); setWarnings(description.warnings ?? []); setSelected([]); setSelectedEdge(null); setPanel('architecture'); setWeightsOpen(false); setMoveId(null)
       past.current = []; future.current = []; setLibrary(false)
       setMessage(''); setLayerSearch(''); setAllowDisconnected(false)
     } catch (e) { if (sequence === loadSequence.current) setError(String(e)) }
@@ -185,6 +186,18 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
     setValidating(true); setValidatedGraph(null)
     const timer = setTimeout(async () => {
       try {
+        if (offline) {
+          const cell = evaluation.cells[0] ?? { window: catalog.offline!.reference_window, horizon: catalog.offline!.reference_horizon }
+          const description = await api.describeGraph(graph, cell.window, cell.horizon)
+          if (!cancelled) {
+            setMetadata(previous => ({ ...previous, ...description.graph_nodes }))
+            setValidatedGraph(description.reference ? graph : null)
+            setParameters(description.parameters ?? null)
+            setWarnings(description.warnings ?? [])
+            setValidationError('')
+          }
+          return
+        }
         if (!evaluation.cells.length) throw new Error('Select at least one evaluation cell.')
         let first: Record<string, GraphNodeInfo> | undefined
         const notices: string[] = []
@@ -201,7 +214,7 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
       finally { if (!cancelled) setValidating(false) }
     }, 300)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [graph, evaluation.cells])
+  }, [graph, evaluation.cells, offline])
   const addModel = async (id: string) => {
     const preset = catalog.presets.find(p => p.preset_id === id)
     if (!preset || !graph || graph.locked) return
@@ -264,18 +277,22 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
   const shapeFit = autoFit && validatedGraph === graph ? info?.shape_fit : undefined
   const algebraDimensions = catalog.algebra_dimensions ?? DEFAULT_ALGEBRA_DIMENSIONS
   const switchLayer = async (target: 'dense' | 'hyper_dense', algebra?: string) => {
-    if (!graph || !inspect || graph.locked || validatedGraph !== graph || swapping) return
+    if (!graph || !inspect || graph.locked || (!offline && validatedGraph !== graph) || swapping) return
     setSwapError(''); setSwapping(true)
     const selectedEvaluation = evaluation
     try {
       const selectedAlgebra = algebra ?? replacementAlgebra
       const { spec: next } = await api.editGraph(graph, { action: 'replace', id: inspect.id, kind: target, params: { algebra: selectedAlgebra } }, selectedEvaluation.cells)
       let preview: Record<string, GraphNodeInfo> | undefined
-      for (const cell of selectedEvaluation.cells) {
-        const before = await api.validateGraph(graph, cell.window, cell.horizon)
-        const after = await api.validateGraph(next, cell.window, cell.horizon)
-        if (JSON.stringify(before.graph_nodes[inspect.id]?.shape) !== JSON.stringify(after.graph_nodes[inspect.id]?.shape)) throw new Error(`The replacement changes this layer’s shape for window ${cell.window} / horizon ${cell.horizon}. Original layer kept.`)
-        preview ??= after.graph_nodes
+      if (offline) {
+        preview = (await api.describeGraph(next, catalog.offline!.reference_window, catalog.offline!.reference_horizon)).graph_nodes
+      } else {
+        for (const cell of selectedEvaluation.cells) {
+          const before = await api.validateGraph(graph, cell.window, cell.horizon)
+          const after = await api.validateGraph(next, cell.window, cell.horizon)
+          if (JSON.stringify(before.graph_nodes[inspect.id]?.shape) !== JSON.stringify(after.graph_nodes[inspect.id]?.shape)) throw new Error(`The replacement changes this layer’s shape for window ${cell.window} / horizon ${cell.horizon}. Original layer kept.`)
+          preview ??= after.graph_nodes
+        }
       }
       if (current.current?.graph !== graph || evaluationRef.current !== selectedEvaluation) throw new Error('The experiment changed while checking. Please try the switch again.')
       commit({ ...current.current, graph: next })
@@ -293,7 +310,7 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
   const selectedNodeIds = selectionIds(selected).filter(id => graph?.nodes.some(n => n.id === id))
   const save = async () => {
     if (!graph || !snapshot) return
-    try { const record = await api.saveGraph(graph, { ...snapshot.view, renderer: 'flow', version: 1, camera: camera.current, direction: 'LR' }, savedId); setSavedId(record.id); setMessage('Graph and canvas layout saved.'); void queryClient.invalidateQueries({ queryKey: ['architectures'] }) }
+    try { const record = await api.saveGraph(graph, { ...snapshot.view, renderer: 'flow', version: 1, camera: camera.current, direction: 'LR' }, savedId); setSavedId(record.id); setMessage(offline ? 'Graph and canvas layout saved in this browser.' : 'Graph and canvas layout saved.'); void queryClient.invalidateQueries({ queryKey: ['architectures'] }) }
     catch (e) { setError(String(e)) }
   }
   const exportGraph = () => {
@@ -318,7 +335,7 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
       if ((e.key === 'Delete' || e.key === 'Backspace') && !(e.target as HTMLElement).closest('button')) { e.preventDefault(); remove() }
     }}>
     <SidePanel active={active}><div className="builder-panel-header"><span className="eyebrow">Architecture workspace</span><h2>{graph?.name ?? 'Build an experiment'}</h2><button onClick={() => setLibrary(!library)}>{library ? 'Architecture diagram' : 'Method collection'}</button>{graph?.locked && snapshot && <button onClick={() => { commit({ ...snapshot, graph: { ...graph, name: `${graph.name} experiment`.slice(0, 80), locked: false, preset_id: undefined } }); setSavedId(undefined) }}>Clone to edit</button>}{!library && <div className="builder-quick-actions"><button onClick={findLayer} title="Find a layer · ⌘/Ctrl K"><Search size={15} />Find layer<kbd>⌘ K</kbd></button><button className="primary-action" disabled={!graph || graph.locked} onClick={openAdd}><Plus size={15} />Add layer</button></div>}</div>
-      {!library && <><div className="builder-section-tabs" role="tablist" aria-label="Architecture tools">{(['architecture', 'inspect', 'add', 'run'] as const).map(key => <button key={key} role="tab" id={`builder-tab-${key}`} aria-controls={`builder-panel-${key}`} aria-selected={panel === key} onClick={() => { setPanel(key); setAllowDisconnected(false); if (key !== 'add') setMoveId(null) }}>{key === 'architecture' ? 'Architecture' : key === 'inspect' ? 'Inspect' : key === 'add' ? 'Add' : 'Run'}</button>)}</div>
+      {!library && <>{offline && <div className="offline-builder-note"><strong>Browser playground</strong><span>Designs stay on this device. Shapes and parameters are reference values for window 10 / horizon 1 until you edit.</span></div>}<div className="builder-section-tabs" role="tablist" aria-label="Architecture tools">{(['architecture', 'inspect', 'add', 'run'] as const).map(key => <button key={key} role="tab" id={`builder-tab-${key}`} aria-controls={`builder-panel-${key}`} aria-selected={panel === key} onClick={() => { setPanel(key); setAllowDisconnected(false); if (key !== 'add') setMoveId(null) }}>{key === 'architecture' ? 'Architecture' : key === 'inspect' ? 'Inspect' : key === 'add' ? 'Add' : 'Run'}</button>)}</div>
       <div role="tabpanel" id={`builder-panel-${panel}`} aria-labelledby={`builder-tab-${panel}`} className="builder-tab-content">
       {panel === 'architecture' && <>
         <label>Starting model<select aria-label="Load graph preset" disabled={loading} value={graph?.preset_id ?? ''} onChange={e => { const p = catalog.presets.find(p => p.preset_id === e.target.value); if (p) void load(p) }}><option value="" disabled>{graph?.name ?? 'Choose a starting point…'}</option>{presetOptions}</select></label>
@@ -361,7 +378,7 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
               }}>{!palette.some(p => p.type === (layerKind ?? inspect.kind)) && <option value={inspect.kind} disabled>{name(inspect.id)} (current)</option>}{palette.map(p => {
                 const arity = portsFor({ id: '__replacement__', kind: p.type, params: p.defaults }, graph, {}).length
                 const compatible = arity === replacementPorts(inspect, graph, metadata).length
-                const needsValidation = layerKind && p.type !== layerKind && ['dense', 'hyper_dense'].includes(p.type) && (validating || validatedGraph !== graph)
+                const needsValidation = layerKind && p.type !== layerKind && ['dense', 'hyper_dense'].includes(p.type) && (validating || (!offline && validatedGraph !== graph))
                 return <option key={p.type} value={p.type} disabled={!compatible || Boolean(needsValidation)}>{p.label}{compatible ? '' : ` · needs ${arity} inputs`}</option>
               })}</select></label><p className="replacement-hint">Choose another type to replace this layer. Its connections stay in place.</p>
               {inspect.kind === 'hyper_dense' && <label><input type="checkbox" aria-label="Auto-fit connection" disabled={graph.locked || swapping} checked={autoFit} onChange={e => updateParams('shape_mode', e.target.checked ? 'preserve' : 'manual')} />Auto-fit connection</label>}
@@ -371,10 +388,11 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
               </label>)}
               {!Object.keys(settings).length && <p>This is a structural operation. Reconnect its inputs or replace it with a palette operation.</p>}
               {layerKind && <div className="layer-type-card">
-                <label>{layerKind === 'dense' ? 'Target algebra' : 'Algebra'}<select aria-label="Algebra" disabled={graph.locked || swapping || (!autoFit && (validating || validatedGraph !== graph))} value={layerKind === 'hyper_dense' ? String(settings.algebra) : replacementAlgebra} onChange={e => autoFit ? updateParams('algebra', e.target.value) : layerKind === 'hyper_dense' ? void switchLayer('hyper_dense', e.target.value) : setReplacementAlgebra(e.target.value)}>{layerKind === 'hyper_dense' && settings.algebra === 'tricomplex' && <option value="tricomplex" disabled>Cyclic tricomplex (existing layer)</option>}{catalog.algebras.filter(algebra => algebra !== 'tricomplex').map(algebra => <option key={algebra} value={algebra}>{({ complex: 'Complex (2D)', split_complex: 'Split-complex (2D)', quaternion: 'Quaternion (4D)', coquaternion: 'Coquaternion (4D)', cl11: 'Cl(1,1) (4D)', octonion: 'Octonion (8D)' } as Record<string, string>)[algebra] ?? `${algebra} (${algebraDimensions[algebra]}D)`}</option>)}</select></label>
+                <label>{layerKind === 'dense' ? 'Target algebra' : 'Algebra'}<select aria-label="Algebra" disabled={graph.locked || swapping || (!autoFit && (validating || (!offline && validatedGraph !== graph)))} value={layerKind === 'hyper_dense' ? String(settings.algebra) : replacementAlgebra} onChange={e => autoFit ? updateParams('algebra', e.target.value) : layerKind === 'hyper_dense' ? void switchLayer('hyper_dense', e.target.value) : setReplacementAlgebra(e.target.value)}>{layerKind === 'hyper_dense' && settings.algebra === 'tricomplex' && <option value="tricomplex" disabled>Cyclic tricomplex (existing layer)</option>}{catalog.algebras.filter(algebra => algebra !== 'tricomplex').map(algebra => <option key={algebra} value={algebra}>{({ complex: 'Complex (2D)', split_complex: 'Split-complex (2D)', quaternion: 'Quaternion (4D)', coquaternion: 'Coquaternion (4D)', cl11: 'Cl(1,1) (4D)', octonion: 'Octonion (8D)' } as Record<string, string>)[algebra] ?? `${algebra} (${algebraDimensions[algebra]}D)`}</option>)}</select></label>
                 <p>{autoFit ? 'Output shape matches the input connection.' : layerKind === 'hyper_dense' ? `${Number(settings.units ?? settings.out_features) * algebraDimensions[String(settings.algebra)]} output features = ${settings.units ?? settings.out_features} hypercomplex units × ${algebraDimensions[String(settings.algebra)]} components.` : `Switch to ${replacementAlgebra} HyperDense without reconnecting this layer.`}</p>
                 <small>{autoFit ? 'Checks every evaluation size. Zero-padding and cropping use no extra trainable projections.' : 'Checks every evaluation size. New weights; no hidden padding.'}</small>
-                {layerKind === 'hyper_dense' && <button type="button" onClick={() => { pendingFocus.current = null; diagram.current?.hold(); setWeightsOpen(true) }}>Inspect weight structure</button>}
+                {layerKind === 'hyper_dense' && <button type="button" disabled={offline} title={offline ? 'Weight inspection requires connected compute.' : undefined} onClick={() => { pendingFocus.current = null; diagram.current?.hold(); setWeightsOpen(true) }}>Inspect weight structure</button>}
+                {layerKind === 'hyper_dense' && offline && <small>Weight inspection requires connected compute.</small>}
                 {inspect.module_ref && graph.nodes.filter(n => n.module_ref === inspect.module_ref).length > 1 && <p>Switching affects only this call and gives it independent weights.</p>}
                 {swapping && <p role="status">Checking replacement compatibility…</p>}
                 {swapError && <p className="swap-error" role="alert">{swapError}</p>}
@@ -415,7 +433,7 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
             </>}
 
       </>}
-      {panel === 'run' && graph && <><h3>Run experiment</h3><div className="graph-validation" role="status">{validating ? 'Checking your architecture…' : validatedGraph === graph ? `Ready to run · ${parameters?.toLocaleString() ?? '—'} parameters` : 'Not ready yet — fix the connection or shape issue below.'}</div><EvaluationPanel catalog={catalog} evaluation={evaluation} onChange={setEvaluation} /><RunControls demo={catalog.demo} architecture={graph} evaluation={evaluation} disabled={loading || swapping || validating || validatedGraph !== graph} onQueued={job => setMessage(`Queued run ${job.id}`)} /></>}
+      {panel === 'run' && graph && <><h3>Run experiment</h3><div className="graph-validation" role="status">{offline ? validatedGraph === graph ? `Reference metadata · ${parameters?.toLocaleString() ?? '—'} parameters at 10/1` : 'Edited graph · final dimensions have not been calculated' : validating ? 'Checking your architecture…' : validatedGraph === graph ? `Ready to run · ${parameters?.toLocaleString() ?? '—'} parameters` : 'Not ready yet — fix the connection or shape issue below.'}</div>{!offline && <EvaluationPanel catalog={catalog} evaluation={evaluation} onChange={setEvaluation} />}<RunControls offline={offline} demo={catalog.demo} architecture={graph} evaluation={evaluation} disabled={offline || loading || swapping || validating || validatedGraph !== graph} onQueued={job => setMessage(`Queued run ${job.id}`)} /></>}
       </div>
       {validationError && <div className="error-notice" role="alert">{validationError}</div>}{!!warnings.length && <details className="builder-validation-notes"><summary>{warnings.length} disconnected operations</summary>{warnings.map(w => <p key={w}>{w}</p>)}</details>}
       {loading && <p role="status">Preparing architecture…</p>}{error && <div role="alert" className="error-notice">{error}</div>}{message && <p className="builder-feedback" role="status">{message}</p>}</>}

@@ -6,9 +6,9 @@ mechanism-inspired templates. Full implementation of the collection is still
 incomplete; see [method coverage](docs/method_collection.md).
 Find it under **Builder → Method library**.
 
-For a restricted public demo on Vercel and a separate Modal workspace, see the
-[deployment guide](docs/deployment.md). Visitors verify their email without
-creating an account; demo training has server-enforced time and usage limits.
+For the static browser-only builder on Vercel, see the
+[deployment guide](docs/deployment.md). Visitors can design, save locally, and
+export graphs without creating an account. Training requires a connected installation.
 
 Hypercast is a runnable, clean-room evaluation of the paper
 [*4D hypercomplex-valued neural network in multivariate time series

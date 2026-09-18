@@ -2,5 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "npm ci --prefix web",
-  "buildCommand": "node scripts/build-demo.mjs"
+  "buildCommand": "node scripts/build-offline.mjs"
 }

@@ -27,6 +27,7 @@ export type GraphViewState = { positions: Record<string, { x: number; y: number 
 export type ShapeFit = { axis: number; input_width: number; padded_width: number; units: number; output_width: number; padding: number; crop: number }
 export type GraphNodeInfo = { label: string; ports: string[]; shape: unknown; settings: Record<string, unknown>; category: string; source_path?: string; shape_fit?: ShapeFit }
 export type GraphValidation = { valid: boolean; spec: GraphSpec; parameters: number; graph_nodes: Record<string, GraphNodeInfo>; warnings: string[] }
+export type GraphDescription = { graph_nodes: Record<string, GraphNodeInfo>; parameters?: number | null; warnings?: string[]; reference?: boolean }
 export type GraphRecord = { id: string; spec: GraphSpec | ArchitectureSpec; view?: GraphViewState }
 
 export type InternalOverride = {
@@ -86,6 +87,7 @@ export type CatalogLayer = {
 
 export type Catalog = {
   demo?: DemoLimits
+  offline?: { reference_window: number; reference_horizon: number; preset_count: number }
   method_collection?: MethodCollection
   schema_version: number
   categories: { name: string; layers: CatalogLayer[] }[]

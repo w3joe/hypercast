@@ -8,8 +8,11 @@ import type {
   Job,
   ValidationResult,
   InternalGraph,
-  GraphSpec, GraphRecord, GraphViewState, GraphValidation,
+  GraphSpec, GraphRecord, GraphViewState, GraphValidation, GraphDescription,
 } from './types'
+import { offlineApi } from './offlineApi'
+
+export const isOfflineDemo = import.meta.env.VITE_OFFLINE_DEMO === 'true'
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -23,7 +26,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export const api = {
+const remoteApi = {
   demoSession: () => request<import('./types').DemoSession>('/api/v1/demo/session'),
   demoRequestCode: (email: string) => request<{ challenge_id: string }>('/api/v1/demo/request-code', { method: 'POST', body: JSON.stringify({ email }) }),
   demoVerify: (challenge_id: string, code: string) => request<{ authenticated: boolean }>('/api/v1/demo/verify', { method: 'POST', body: JSON.stringify({ challenge_id, code }) }),
@@ -38,7 +41,7 @@ export const api = {
   editGraph: (architecture: GraphSpec, edit: { action: string; id: string; kind: string; params: Record<string, unknown> }, cells: { window: number; horizon: number }[]) =>
     request<{ spec: GraphSpec; warnings: string[] }>('/api/v1/architectures/edit', { method: 'POST', body: JSON.stringify({ architecture, edit, cells }) }),
   describeGraph: (architecture: GraphSpec, window: number, horizon: number) =>
-    request<Pick<GraphValidation, 'graph_nodes'>>('/api/v1/architectures/describe', { method: 'POST', body: JSON.stringify({ architecture, window, horizon }) }),
+    request<GraphDescription>('/api/v1/architectures/describe', { method: 'POST', body: JSON.stringify({ architecture, window, horizon }) }),
   convert: (architecture: ArchitectureSpec | GraphSpec, window: number, horizon: number) =>
     request<GraphSpec>('/api/v1/architectures/convert', { method: 'POST', body: JSON.stringify({ architecture, window, horizon }) }),
   validateGraph: (architecture: GraphSpec, window: number, horizon: number) =>
@@ -80,3 +83,5 @@ export const api = {
     return response.text()
   },
 }
+
+export const api = (isOfflineDemo ? offlineApi : remoteApi) as typeof remoteApi

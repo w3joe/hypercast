@@ -43,14 +43,11 @@ export function prepareDenseSwap(
   if (target === 'hyper_dense' && (!Number.isInteger(dimension) || dimension < 2)) {
     throw new Error(`Unknown HyperDense algebra ${selectedAlgebra}.`)
   }
-  if (target === 'hyper_dense' && (inputWidth % dimension || outputWidth % dimension)) {
-    throw new Error(`Cannot preserve this shape: input width ${inputWidth} and output width ${outputWidth} must both be divisible by ${dimension} for ${selectedAlgebra} HyperDense. No padding or projection has been added.`)
-  }
-  const units = target === 'hyper_dense' ? outputWidth / dimension : outputWidth
+  const units = target === 'hyper_dense' ? Math.ceil(outputWidth / dimension) : outputWidth
   if (outputWidth > 512) throw new Error('This width exceeds the supported replacement layer size.')
   const replacement: GraphNodeSpec = {
     id, kind: target, group: node.group, label: target === 'hyper_dense' ? 'HyperDense' : 'Dense',
-    params: { units, bias: settings.bias ?? true, ...(target === 'hyper_dense' ? { algebra: selectedAlgebra } : {}) },
+    params: { units, bias: settings.bias ?? true, ...(target === 'hyper_dense' ? { algebra: selectedAlgebra, shape_mode: 'preserve' } : {}) },
   }
   return { ...graph, nodes: graph.nodes.map(n => n.id === id ? replacement : n),
     edges: graph.edges.map(e => e.target === id ? { ...e, port: 'x' } : e) }

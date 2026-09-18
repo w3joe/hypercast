@@ -74,7 +74,10 @@ describe('offline API', () => {
   it('rejects compute actions with an offline explanation', async () => {
     await expect(offlineApi.submit()).rejects.toThrow(/no compute connection/i)
     await expect(offlineApi.previewWeights()).rejects.toThrow(/no compute connection/i)
-    await expect(offlineApi.jobs()).resolves.toEqual([])
+    const examples = await offlineApi.jobs()
+    expect(examples).toHaveLength(4)
+    expect(examples.every(job => job.status.state === 'complete')).toBe(true)
+    expect(examples.every(job => job.runs.length === 6)).toBe(true)
     await expect(offlineApi.comparisonArchives()).resolves.toEqual([])
   })
 })

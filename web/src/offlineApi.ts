@@ -1,4 +1,5 @@
 import { prepareDenseSwap } from './layerSwap'
+import { offlineExampleJobs } from './offlineExamples'
 import type {
   ArchitectureSpec,
   Catalog,
@@ -169,7 +170,7 @@ export const offlineApi = {
     const info = referenceMetadata(data, graph)
     return { spec: prepareDenseSwap(graph, edit.id, edit.kind as 'dense' | 'hyper_dense', info, String(edit.params.algebra ?? 'quaternion')), warnings: [] }
   },
-  jobs: async () => [],
+  jobs: async () => structuredClone(offlineExampleJobs),
   legacyRuns: async () => [],
   comparisonArchives: async () => [],
   architectures: async () => [],

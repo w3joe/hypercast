@@ -21,7 +21,7 @@ function statusClass(state: Job['status']['state']) {
   return `status-pill status-${state.replace('_', '-')}`
 }
 
-function RunsView({ jobs, legacyRuns }: { jobs: Job[]; legacyRuns: Record<string, string | number | null>[] }) {
+function RunsView({ jobs, legacyRuns, examples = false }: { jobs: Job[]; legacyRuns: Record<string, string | number | null>[]; examples?: boolean }) {
   const queryClient = useQueryClient()
   const [logJob, setLogJob] = useState<string | null>(null)
   const cancelMutation = useMutation({
@@ -33,13 +33,14 @@ function RunsView({ jobs, legacyRuns }: { jobs: Job[]; legacyRuns: Record<string
   return (
     <section className="content-view">
       <div className="view-heading"><div><span className="eyebrow">Experiment lifecycle</span><h2>Runs</h2></div><span>{jobs.length} persisted jobs</span></div>
+      {examples && <div className="offline-builder-note" role="note"><strong>Example results</strong><span>These illustrative, read-only runs show how experiment tracking works. They are not benchmark claims or results produced in this browser.</span></div>}
       {!jobs.length && <div className="large-empty panel-surface"><Clock3 size={34} /><h3>No experiments yet</h3><p>Build an architecture and submit a validation run.</p></div>}
       <div className="jobs-list">
         {jobs.map((job) => {
           const percent = job.status.total ? Math.round(job.status.completed / job.status.total * 100) : 0
           const active = ['queued', 'starting', 'running'].includes(job.status.state)
           return <article className="job-card panel-surface" key={job.id}>
-            <div className="job-top"><div><span className={statusClass(job.status.state)}>{job.status.state}</span><h3>{job.status.architecture_name}</h3><p>{job.status.phase.replace('_', ' ')} · {job.status.protocol ?? 'chronological-v1'} · {job.status.preset} · {job.status.execution_target ?? 'local'}{job.status.gpu ? ` · ${job.status.gpu}` : ''} · {job.id}</p></div><div className="job-actions">{job.status.modal_dashboard_url && <a className="text-button" href={job.status.modal_dashboard_url} target="_blank" rel="noreferrer">Modal <ExternalLink size={13} /></a>}<button className="text-button" onClick={() => setLogJob(logJob === job.id ? null : job.id)}>View log</button>{active && <button className="danger-button" disabled={cancelMutation.isPending} onClick={() => cancelMutation.mutate(job.id)}><CircleStop size={14} />Cancel</button>}</div></div>
+            <div className="job-top"><div><span className={statusClass(job.status.state)}>{job.status.state}</span><h3>{job.status.architecture_name}</h3><p>{job.status.phase.replace('_', ' ')} · {job.status.protocol ?? 'chronological-v1'} · {job.status.preset} · {job.status.execution_target ?? 'local'}{job.status.gpu ? ` · ${job.status.gpu}` : ''} · {job.id}</p></div><div className="job-actions">{job.status.modal_dashboard_url && <a className="text-button" href={job.status.modal_dashboard_url} target="_blank" rel="noreferrer">Modal <ExternalLink size={13} /></a>}{!examples && <button className="text-button" onClick={() => setLogJob(logJob === job.id ? null : job.id)}>View log</button>}{active && <button className="danger-button" disabled={cancelMutation.isPending} onClick={() => cancelMutation.mutate(job.id)}><CircleStop size={14} />Cancel</button>}</div></div>
             <div className="progress-track"><div style={{ width: `${percent}%` }} /></div>
             <div className="job-meta"><span>{job.status.completed} / {job.status.total || '—'} runs</span><span>{percent}%</span>{job.status.current && <span>w{job.status.current.window}/h{job.status.current.horizon} · seed {job.status.current.seed} · epoch {job.status.current.epoch}/{job.status.current.epochs}</span>}<span>Updated {new Date(job.status.updated_at).toLocaleString()}</span></div>
             {job.status.error && <div className="inline-error">{job.status.error}</div>}
@@ -76,7 +77,7 @@ export default function App() {
   const [runId, setRunId] = useState('')
   const [runState, setRunState] = useState('all')
   const catalog = useQuery({ queryKey: ['catalog'], queryFn: api.catalog, staleTime: Infinity })
-  const jobs = useQuery({ queryKey: ['jobs'], queryFn: api.jobs, enabled: !isOfflineDemo, refetchInterval: isOfflineDemo ? false : 1500 })
+  const jobs = useQuery({ queryKey: ['jobs'], queryFn: api.jobs, refetchInterval: isOfflineDemo ? false : 1500, staleTime: isOfflineDemo ? Infinity : 0 })
   const archives = useQuery({ queryKey: ['comparison-archives'], queryFn: api.comparisonArchives, enabled: !isOfflineDemo && view === 'compare', staleTime: 60000 })
   const legacyRuns = useQuery({ queryKey: ['legacy-runs'], queryFn: api.legacyRuns, enabled: !isOfflineDemo, staleTime: 5000 })
   const activeCount = useMemo(() => (jobs.data ?? []).filter((job) => ['queued', 'starting', 'running'].includes(job.status.state)).length, [jobs.data])
@@ -92,8 +93,8 @@ export default function App() {
         <button className="brand" aria-label="Hypercast Architecture Playground" onClick={() => setView('builder')}><BrandLogo /><small>Architecture Playground</small></button>
         <nav aria-label="Primary navigation">
           <button className={view === 'builder' ? 'active' : ''} onClick={() => setView('builder')}><Blocks size={16} />Builder</button>
-          {!isOfflineDemo && <button className={view === 'runs' ? 'active' : ''} onClick={() => setView('runs')}><Clock3 size={16} />Runs{activeCount > 0 && <span className="nav-count">{activeCount}</span>}</button>}
-          {!isOfflineDemo && <button className={view === 'compare' ? 'active' : ''} onClick={() => setView('compare')}><BarChart3 size={16} />Compare</button>}
+          <button className={view === 'runs' ? 'active' : ''} onClick={() => setView('runs')}><Clock3 size={16} />Runs{activeCount > 0 && <span className="nav-count">{activeCount}</span>}</button>
+          <button className={view === 'compare' ? 'active' : ''} onClick={() => setView('compare')}><BarChart3 size={16} />Compare</button>
         </nav>
         {isOfflineDemo && <span className="offline-badge">Browser playground</span>}
         <div ref={setToolbar} className="topbar-tools">{view === 'runs' && <label className="topbar-single-picker"><span>Run</span><select aria-label="Select run" value={runId} onChange={e => setRunId(e.target.value)}><option value="">All runs</option>{(jobs.data ?? []).map(j => <option key={j.id} value={j.id}>{j.status.architecture_name} · {j.id.slice(-8)}</option>)}</select></label>}</div>
@@ -110,8 +111,8 @@ export default function App() {
         onKeyDown={e => { if (['ArrowLeft', 'ArrowRight', 'Home'].includes(e.key)) { e.preventDefault(); resizeSidebar(e.key === 'Home' ? 320 : sidebarWidth + (e.key === 'ArrowRight' ? 16 : -16)) } }} />
       <main className="app-content">
         <div className="builder-view" hidden={view !== 'builder'}><GraphBuilder catalog={catalog.data} active={view === 'builder'} /></div>
-        {view === 'runs' && <><SidePanel><section className="sidebar-section"><span className="eyebrow">Experiment history</span><h2>Runs</h2><label>Status<select aria-label="Filter run status" value={runState} onChange={e => setRunState(e.target.value)}>{['all', 'queued', 'starting', 'running', 'complete', 'failed', 'cancelled', 'interrupted'].map(s => <option key={s} value={s}>{s === 'all' ? 'All statuses' : s}</option>)}</select></label><p className="muted-copy">Select a run from the top bar to inspect its progress and saved scores.</p></section></SidePanel><ErrorNotice error={jobs.error} /><RunsView jobs={(jobs.data ?? []).filter(j => (!runId || j.id === runId) && (runState === 'all' || j.status.state === runState))} legacyRuns={runId ? [] : legacyRuns.data ?? []} /></>}
-        {view === 'compare' && <><ErrorNotice error={jobs.error} /><ErrorNotice error={archives.error} /><CompareView jobs={[...jobs.data ?? [], ...archives.data ?? []]} finalAction={job => <FinalTestDialog job={job} onComplete={() => queryClient.invalidateQueries({ queryKey: ['jobs'] })} />} /></>}
+        {view === 'runs' && <><SidePanel><section className="sidebar-section"><span className="eyebrow">Experiment history</span><h2>Runs</h2><label>Status<select aria-label="Filter run status" value={runState} onChange={e => setRunState(e.target.value)}>{['all', 'queued', 'starting', 'running', 'complete', 'failed', 'cancelled', 'interrupted'].map(s => <option key={s} value={s}>{s === 'all' ? 'All statuses' : s}</option>)}</select></label><p className="muted-copy">{isOfflineDemo ? 'Explore read-only example runs and their saved scores.' : 'Select a run from the top bar to inspect its progress and saved scores.'}</p></section></SidePanel><ErrorNotice error={jobs.error} /><RunsView examples={isOfflineDemo} jobs={(jobs.data ?? []).filter(j => (!runId || j.id === runId) && (runState === 'all' || j.status.state === runState))} legacyRuns={runId ? [] : legacyRuns.data ?? []} /></>}
+        {view === 'compare' && <><ErrorNotice error={jobs.error} /><ErrorNotice error={archives.error} />{isOfflineDemo && <div className="offline-builder-note offline-comparison-note" role="note"><strong>Example comparison</strong><span>Explore illustrative read-only scores. Export a design and train it in connected Hypercast to create real results.</span></div>}<CompareView jobs={[...jobs.data ?? [], ...archives.data ?? []]} offlineExamples={isOfflineDemo} finalAction={job => isOfflineDemo ? <span>Example result</span> : <FinalTestDialog job={job} onComplete={() => queryClient.invalidateQueries({ queryKey: ['jobs'] })} />} /></>}
       </main>
       </div>
     </div></WorkspacePanels.Provider>

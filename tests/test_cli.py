@@ -23,8 +23,8 @@ def test_cli_create_insert_set_validate(tmp_path, capsys):
     path = tmp_path / 'model.yaml'
     assert main(['model', 'create', 'tslib-dlinear', '--out', str(path), '--json']) == 0
     assert json.loads(capsys.readouterr().out)['file'] == str(path)
-    assert main(['layer', 'insert', str(path), '--before', 'core', '--id', 'lift', '--type', 'dense', '--set', 'units=12']) == 0
-    assert main(['layer', 'insert', str(path), '--before', 'core', '--id', 'hyper', '--type', 'hyper_dense', '--set', 'algebra=tricomplex', '--set', 'units=4']) == 0
+    assert main(['layer', 'insert', str(path), '--before', 'core', '--id', 'lift', '--type', 'dense', '--set', 'units=16']) == 0
+    assert main(['layer', 'insert', str(path), '--before', 'core', '--id', 'hyper', '--type', 'hyper_dense', '--set', 'algebra=octonion', '--set', 'units=2']) == 0
     assert main(['model', 'validate', str(path), '--cells', '10/1,20/5']) == 0
     assert [n['id'] for n in load_model(path)['layers']][:3] == ['lift', 'hyper', 'core']
     before = path.read_bytes()
@@ -69,13 +69,13 @@ def test_graph_edit_preserves_layout_and_rejects_cycles(tmp_path, spec):
 
 def test_dense_swap_validates_dimensions_and_keeps_original(spec):
     cells = [{'window': 10, 'horizon': 1}, {'window': 20, 'horizon': 5}]
-    spec = edit_layer(spec, 'insert', node_id='lift', kind='dense', params={'units': 12}, before='core', cells=cells)
-    spec = edit_layer(spec, 'insert', node_id='dense', kind='dense', params={'units': 12}, before='core', cells=cells)
-    result = dense_swap(spec, 'dense', 'hyper_dense', 'tricomplex', cells)
-    assert result['layers'][1]['params']['units'] == 4
+    spec = edit_layer(spec, 'insert', node_id='lift', kind='dense', params={'units': 16}, before='core', cells=cells)
+    spec = edit_layer(spec, 'insert', node_id='dense', kind='dense', params={'units': 16}, before='core', cells=cells)
+    result = dense_swap(spec, 'dense', 'hyper_dense', 'octonion', cells)
+    assert result['layers'][1]['params']['units'] == 2
     assert spec['layers'][1]['type'] == 'dense'
     with pytest.raises(ValueError, match='divisible'):
-        dense_swap(spec, 'lift', 'hyper_dense', 'tricomplex', cells)
+        dense_swap(spec, 'lift', 'hyper_dense', 'octonion', cells)
 
 
 def test_workspace_lock_excludes_second_owner(tmp_path):

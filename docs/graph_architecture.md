@@ -86,7 +86,7 @@ Select a layer (or use **Find a layer**) and choose its **Layer type** in the
 settings panel. Choose the target algebra first; Dense → HyperDense preserves
 the real output width while converting it to the corresponding number of
 hypercomplex units. For example, 24 real output features become 12 complex,
-8 tricomplex, 6 quaternion, or 3 octonion units. Switching back restores the
+6 quaternion, or 3 octonion units. Switching back restores the
 equivalent real output width.
 
 The switch checks every selected evaluation cell before committing, preserves
@@ -102,13 +102,11 @@ restores the original node.
 | Dimension | Algebra choices | Basis/product convention |
 | --- | --- | --- |
 | 2D | Complex, split-complex | `i² = -1` or `i² = +1` |
-| 3D | Cyclic tricomplex | `h² = k`, `k² = h`, `hk = 1` |
 | 4D | Quaternion, coquaternion, `Cl(1,1)` | Paper multiplication tables |
 | 8D | Octonion | Explicit Fano-plane orientation |
 
-The cyclic tricomplex algebra is associative and commutative but has zero
-divisors. Octonion multiplication is non-associative. HyperDense uses one binary
-input-by-weight product, so both remain well-defined for this layer.
+Octonion multiplication is non-associative. HyperDense uses one binary
+input-by-weight product, so it remains well-defined for this layer.
 
 1. Load a preset; locked baselines retain **Clone to edit**. Expand a stage or
    search its operations from the Architecture tree.

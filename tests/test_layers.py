@@ -78,6 +78,6 @@ def test_hyperdense_matches_direct_algebra_product(name: str) -> None:
 
 
 def test_hyperdense_reports_algebra_specific_input_width() -> None:
-    layer = HyperDense(2, 1, algebra="tricomplex")
-    with pytest.raises(ValueError, match="Expected final dimension 6"):
+    layer = HyperDense(2, 1, algebra="octonion")
+    with pytest.raises(ValueError, match="Expected final dimension 16"):
         layer(torch.randn(2, 8))

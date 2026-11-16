@@ -10,7 +10,6 @@ Supported Algebras
 ------------------
 - ``"complex"`` ($d = 2$): $\mathbb{C} = \mathbb{R}[i]/(i^2 + 1)$
 - ``"split_complex"`` ($d = 2$): $\mathbb{R}[j]/(j^2 - 1)$
-- ``"tricomplex"`` ($d = 3$): cyclic 3-complex $\mathbb{R}[h]/(h^3 - 1)$
 - ``"quaternion"`` ($d = 4$): Hamilton quaternions $\mathbb{H}$
 - ``"coquaternion"`` ($d = 4$): split-quaternions
 - ``"cl11"`` ($d = 4$): Clifford algebra $\mathrm{Cl}(1, 1)$
@@ -155,17 +154,6 @@ _COMPLEX = _constants(2, {(1, 1): (-1, 0)})
 # Split-complex (hyperbolic) numbers R[j] / (j^2 - 1): e_1^2 = +e_0.
 _SPLIT_COMPLEX = _constants(2, {(1, 1): (1, 0)})
 
-# Cyclic tricomplex numbers R[h] / (h^3 - 1), with e_1 = h and e_2 = h^2.
-_TRICOMPLEX = _constants(
-    3,
-    {
-        (1, 1): (1, 2),
-        (1, 2): (1, 0),
-        (2, 1): (1, 0),
-        (2, 2): (1, 1),
-    },
-)
-
 # Hamilton quaternions H: i^2 = j^2 = k^2 = ijk = -1.
 _QUATERNION = _constants(
     4,
@@ -232,7 +220,6 @@ _OCTONION = _imaginary_units(
 ALGEBRAS: dict[str, Algebra] = {
     "complex": Algebra("complex", _COMPLEX),
     "split_complex": Algebra("split_complex", _SPLIT_COMPLEX),
-    "tricomplex": Algebra("tricomplex", _TRICOMPLEX),
     "quaternion": Algebra("quaternion", _QUATERNION),
     "coquaternion": Algebra("coquaternion", _COQUATERNION),
     "cl11": Algebra("cl11", _CLIFFORD_11),
@@ -243,9 +230,6 @@ _ALIASES = {
     "complexes": "complex",
     "split-complex": "split_complex",
     "split complex": "split_complex",
-    "trinion": "tricomplex",
-    "trinions": "tricomplex",
-    "tricomplexes": "tricomplex",
     "quaternions": "quaternion",
     "coquaternions": "coquaternion",
     "cl(1,1)": "cl11",
@@ -261,7 +245,7 @@ def get_algebra(name: str) -> Algebra:
     ----------
     name : str
         Case-insensitive algebra name (for example ``"quaternion"``,
-        ``"cl11"``, ``"Cl(1,1)"``, ``"split-complex"``, or ``"trinion"``).
+        ``"cl11"``, ``"Cl(1,1)"``, ``"split-complex"``, or ``"octonion"``).
 
     Returns
     -------

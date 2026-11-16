@@ -4,7 +4,6 @@ import type { GraphSpec, GraphNodeSpec, GraphNodeInfo } from './types'
 export const DEFAULT_ALGEBRA_DIMENSIONS: Record<string, number> = {
   complex: 2,
   split_complex: 2,
-  tricomplex: 3,
   quaternion: 4,
   coquaternion: 4,
   cl11: 4,

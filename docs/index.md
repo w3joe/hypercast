@@ -4,7 +4,7 @@
 
 It combines:
 
-1. **Drop-in PyTorch hypercomplex layers** ([`HyperDense`][hypercast4d.layers.HyperDense] and [`ShapePreservingHyperDense`][hypercast4d.layers.ShapePreservingHyperDense]) backed by explicit structure-constant tensors across seven finite-dimensional real algebras (2D, 3D, 4D, and 8D).
+1. **Drop-in PyTorch hypercomplex layers** ([`HyperDense`][hypercast4d.layers.HyperDense] and [`ShapePreservingHyperDense`][hypercast4d.layers.ShapePreservingHyperDense]) backed by explicit structure-constant tensors across six finite-dimensional real algebras (2D, 4D, and 8D).
 2. **Executable model graphs** ([`hypercast4d.architecture`][hypercast4d.architecture] and [`hypercast4d.graph_architecture`][hypercast4d.graph_architecture]) supporting both sequential pipelines (Schema v1) and symbolically lowered PyTorch FX directed acyclic graphs (Schema v2), including 15 composable TSLib model cores.
 3. **Leakage-safe forecasting evaluation** ([`hypercast4d.data`][hypercast4d.data], [`hypercast4d.training`][hypercast4d.training], and [`hypercast4d.diagnostics`][hypercast4d.diagnostics]) enforcing chronological target splits, training-only normalization, persistence baselines, per-lead diagnostics, and one-shot held-out final testing.
 4. **Unified visual & CLI workflows** ([`hypercast4d-playground`][hypercast4d.playground] and [`hypercast`][hypercast4d.cli]) sharing identical YAML/JSON specifications, shape validation, weight-matrix inspectors, and local/Modal/GCP execution backends.
@@ -38,7 +38,7 @@ Then open `http://127.0.0.1:8000` in your browser.
 | Section | What You Will Find |
 |---|---|
 | **[Quickstart & Tutorials](quickstart.md)** | Copy-pasteable Python examples for `HyperDense`, `ShapePreservingHyperDense`, Schema v1/v2 graph editing, leakage-safe training, CLI usage, and the visual Playground. |
-| **[Algorithms & Mathematics](algorithms.md)** | Structure constants and multiplication tables for all 7 algebras, real block-matrix equivalence, parameter complexity ($dnm$ vs. $d^2nm$), symbolic FX lowering, chronological split rules, and diagnostic metric definitions. |
+| **[Algorithms & Mathematics](algorithms.md)** | Structure constants and multiplication tables for all 6 algebras, real block-matrix equivalence, parameter complexity ($dnm$ vs. $d^2nm$), symbolic FX lowering, chronological split rules, and diagnostic metric definitions. |
 | **[Supported Components & Models](components.md)** | Parameter bounds, defaults, and tensor-shape contracts for all pipeline blocks, graph operators, input representations, forecast heads, and the 25 built-in presets. |
 | **[Schemas, YAML & REST API](configuration.md)** | Complete reference for `configs/evaluation.yaml`, `configs/paper_reproduction.yaml`, Schema v1 & v2 YAML/JSON formats, environment variables, and loopback HTTP endpoints (`/api/v1/*`). |
 | **[Command-Line Interface](cli.md)** | Guide to `hypercast` (`model`, `layer`, `graph`, `experiment`, `job`, `server`), exit codes, and machine-readable `--json` output. |
@@ -51,7 +51,7 @@ Then open `http://127.0.0.1:8000` in your browser.
 
 ```text
 hypercast4d
-├── algebras.py            # 7 real algebras (2D/3D/4D/8D) & bilinear product kernels
+├── algebras.py            # 6 real algebras (2D/4D/8D) & bilinear product kernels
 ├── layers.py              # HyperDense & ShapePreservingHyperDense (nn.Module)
 ├── visualizations.py      # Exact component & effective block-matrix snapshots
 ├── architecture.py        # Schema v1 sequential compiler, catalog & 25 presets

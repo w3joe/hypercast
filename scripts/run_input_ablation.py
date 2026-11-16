@@ -18,20 +18,20 @@ from hypercast4d.playground_runner import normalize_evaluation, run_job
 def candidates():
     catalogue = {item['preset_id']: item for item in presets()}
     for model in ('dlinear', 'tsmixer', 'itransformer'):
-        for variant in ('original', 'lift_only', 'dense_control', 'hyper_2d', 'hyper_3d', 'hyper_4d'):
+        for variant in ('original', 'lift_only', 'dense_control', 'hyper_2d', 'hyper_4d', 'hyper_8d'):
             spec = copy.deepcopy(catalogue[f'tslib-{model}'])
             spec.pop('preset_id', None)
             spec['locked'] = False
             spec['name'] = f'{model} · input {variant}'
             prefix = []
             if variant != 'original':
-                prefix.append({'id': 'input_lift', 'type': 'dense', 'params': {'units': 12}})
+                prefix.append({'id': 'input_lift', 'type': 'dense', 'params': {'units': 16}})
             if variant == 'dense_control':
-                prefix.append({'id': 'input_dense', 'type': 'dense', 'params': {'units': 12}})
+                prefix.append({'id': 'input_dense', 'type': 'dense', 'params': {'units': 16}})
             if variant.startswith('hyper_'):
                 dimension = int(variant[6])
                 prefix.append({'id': 'input_hyper', 'type': 'hyper_dense', 'params': {
-                    'units': 12 // dimension, 'algebra': {2: 'complex', 3: 'tricomplex', 4: 'quaternion'}[dimension],
+                    'units': 16 // dimension, 'algebra': {2: 'complex', 4: 'quaternion', 8: 'octonion'}[dimension],
                 }})
             spec['layers'] = prefix + spec['layers']
             yield model, variant, normalize_architecture_spec(spec)

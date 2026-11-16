@@ -23,7 +23,7 @@ describe('Dense type conversion', () => {
     expect(prepareDenseSwap(graph, 'dense', 'hyper_dense', metadata).nodes[1].params.units).toBe(8)
   })
   it.each([
-    ['complex', 2], ['split_complex', 2], ['tricomplex', 3],
+    ['complex', 2], ['split_complex', 2],
     ['quaternion', 4], ['coquaternion', 4], ['cl11', 4], ['octonion', 8],
   ])('preserves width for %s HyperDense with %i components', (algebra, dimension) => {
     const metadata = {
@@ -35,7 +35,12 @@ describe('Dense type conversion', () => {
     expect(next.nodes[1].params).toEqual({ units: 24 / Number(dimension), bias: false, algebra })
   })
   it('uses the selected algebra dimension in compatibility errors', () => {
-    expect(() => prepareDenseSwap(graph, 'dense', 'hyper_dense', info, 'tricomplex')).toThrow(/divisible by 3/)
+    const metadata = {
+      ...info,
+      input: { ...info.input, shape: [2, 10, 12] },
+      dense: { ...info.dense, shape: [2, 10, 12] },
+    }
+    expect(() => prepareDenseSwap(graph, 'dense', 'hyper_dense', metadata, 'octonion')).toThrow(/divisible by 8/)
   })
   it('changes algebra while retaining the expanded real output width', () => {
     const denseMetadata = {
@@ -48,9 +53,9 @@ describe('Dense type conversion', () => {
       ...denseMetadata,
       dense: { ...denseMetadata.dense, category: 'custom', label: 'HyperDense' },
     }
-    const tricomplex = prepareDenseSwap(quaternion, 'dense', 'hyper_dense', hyperMetadata, 'tricomplex')
+    const octonion = prepareDenseSwap(quaternion, 'dense', 'hyper_dense', hyperMetadata, 'octonion')
     expect(quaternion.nodes[1].params.units).toBe(6)
-    expect(tricomplex.nodes[1].params).toEqual({ units: 8, bias: false, algebra: 'tricomplex' })
+    expect(octonion.nodes[1].params).toEqual({ units: 3, bias: false, algebra: 'octonion' })
   })
   it('rejects incompatible widths before mutation', () => {
     expect(() => prepareDenseSwap(graph, 'dense', 'hyper_dense', { ...info, input: { ...info.input, shape: [2, 10, 3] } })).toThrow(/divisible by 4/)

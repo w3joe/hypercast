@@ -1,4 +1,9 @@
-"""Paper-aligned real and hypercomplex forecasting models."""
+"""Paper-aligned real and hypercomplex forecasting models.
+
+Implements the Figure 3 neural forecasting architectures from Kycia &
+Niemczynowicz (2025) alongside an ordinary real-valued linear baseline
+([`LinearForecaster`][hypercast4d.models.LinearForecaster]).
+"""
 
 from __future__ import annotations
 
@@ -11,6 +16,7 @@ from .layers import HyperDense
 
 
 def _activation(name: str) -> nn.Module:
+    """Return ``nn.Identity`` for ``'linear'`` or ``nn.ReLU`` for ``'relu'``."""
     if name == "linear":
         return nn.Identity()
     if name == "relu":
@@ -19,7 +25,23 @@ def _activation(name: str) -> nn.Module:
 
 
 class LinearForecaster(nn.Module):
-    """Extra real-valued baseline; this model is not part of the paper."""
+    """Unconstrained real-valued linear baseline mapping flattened history to horizon.
+
+    Parameters
+    ----------
+    window : int
+        Historical lookback window length ``W``.
+    horizon : int
+        Forecast horizon ``H``.
+    features : int, default=COMPONENT_COUNT
+        Number of input series ``C`` per time step.
+
+    Notes
+    -----
+    **Shape:**
+        - Input: ``(batch, window, features)``
+        - Output: ``(batch, horizon)``
+    """
 
     def __init__(
         self, window: int, horizon: int, features: int = COMPONENT_COUNT
@@ -28,23 +50,66 @@ class LinearForecaster(nn.Module):
         self.output = nn.Linear(window * features, horizon)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Flatten ``(batch, window, features)`` and project to ``(batch, horizon)``."""
         return self.output(inputs.flatten(start_dim=1))
 
 
 class CausalConv1d(nn.Conv1d):
-    """Conv1d with the paper notebook's Keras ``padding='causal'`` behavior."""
+    """1D convolution matching TensorFlow/Keras ``padding='causal'`` semantics.
+
+    Left-pads the temporal axis by ``dilation * (kernel_size - 1)`` zeros so
+    output step ``t`` depends only on inputs at ``<= t``.
+    """
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Apply left-padded causal 1D convolution to ``(batch, channels, steps)``."""
         left_padding = self.dilation[0] * (self.kernel_size[0] - 1)
         return super().forward(functional.pad(inputs, (left_padding, 0)))
 
 
 class PaperForecaster(nn.Module):
-    """Shared seven-stage architecture shown in Figure 3 of the paper.
+    """Shared seven-stage forecasting scaffold from Figure 3 of the 4D paper.
 
-    The tested first layer is followed by an optional time-distributed dense
-    layer, max pooling, flattening, an optional dense layer, dropout, and the
-    real-valued forecast head. The first layer is selected with ``kind``.
+    Stages execute in order:
+
+    1. First representation layer selected by ``kind`` (causal ``Conv1D``,
+       full-sequence ``LSTM``, or ``HyperDense``).
+    2. Optional time-distributed ``Linear(first_width, dense_units)`` + activation.
+    3. Temporal ``MaxPool1d(kernel_size=pool_size)``.
+    4. Sequence flattening.
+    5. Optional ``Linear(flattened_width, dense_units)`` + activation.
+    6. ``Dropout(dropout)``.
+    7. Real-valued linear forecast head ``Linear(output_width, horizon)``.
+
+    Parameters
+    ----------
+    kind : {"cnn", "lstm", "hyper"}
+        First-layer family.
+    window : int
+        Historical window length ``W >= pool_size``.
+    horizon : int
+        Forecast horizon ``H >= 1``.
+    first_layer_units : int
+        Convolutional filters, LSTM hidden units, or hypercomplex output units.
+    dense_before_pool : bool
+        Include the pre-pooling dense layer when ``True``.
+    dense_after_pool : bool
+        Include the post-flattening dense layer when ``True``.
+    dense_units : int
+        Hidden width of enabled optional dense layers.
+    activation : {"linear", "relu"}
+        Activation applied after CNN/HyperDense and enabled optional dense layers.
+    dropout : float
+        Dropout probability in ``[0, 1)`` before the output projection.
+    pool_size : int
+        Temporal max-pooling window and stride.
+    conv_kernel_size : int or None
+        Causal Conv1D kernel size (required when ``kind == "cnn"``).
+    algebra : str or None, default=None
+        Algebra name (required when ``kind == "hyper"``).
+    features : int, default=COMPONENT_COUNT
+        Input channel count; must be divisible by ``algebra.component_count``
+        when ``kind == "hyper"``.
     """
 
     def __init__(
@@ -147,6 +212,7 @@ class PaperForecaster(nn.Module):
                 module.bias_hh_l0.requires_grad_(False)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Compute ``(batch, horizon)`` forecasts from ``(batch, window, features)``."""
         if self.kind == "cnn":
             sequence = self.first(inputs.transpose(1, 2)).transpose(1, 2)
             sequence = self.first_activation(sequence)
@@ -177,7 +243,42 @@ def build_model(
     pool_size: int | None = None,
     features: int = COMPONENT_COUNT,
 ) -> nn.Module:
-    """Build a configured baseline or Figure 3 forecasting architecture."""
+    """Instantiate a named baseline or Figure 3 forecasting model.
+
+    Parameters
+    ----------
+    name : str
+        Model registry key: ``"linear"``, ``"cnn"``, ``"lstm"``, or
+        ``"hyper_<algebra>"`` (for example ``"hyper_quaternion"``,
+        ``"hyper_coquaternion"``, ``"hyper_cl11"``).
+    window : int
+        Historical window length ``W``.
+    horizon : int
+        Forecast horizon ``H``.
+    first_layer_units : int or None, default=None
+        First-layer width (required for all models except ``"linear"``).
+    conv_kernel_size : int or None, default=None
+        CNN kernel size when ``name == "cnn"``.
+    dense_before_pool : bool or None, default=None
+        Enable pre-pooling dense layer.
+    dense_after_pool : bool or None, default=None
+        Enable post-flatten dense layer.
+    dense_units : int or None, default=None
+        Width of enabled optional dense layers.
+    activation : str or None, default=None
+        Activation function (``"linear"`` or ``"relu"``).
+    dropout : float or None, default=None
+        Dropout probability in ``[0, 1)``.
+    pool_size : int or None, default=None
+        Max-pooling kernel/stride size.
+    features : int, default=COMPONENT_COUNT
+        Input channel count.
+
+    Returns
+    -------
+    torch.nn.Module
+        Constructed :class:`LinearForecaster` or :class:`PaperForecaster`.
+    """
     if name == "linear":
         return LinearForecaster(window, horizon, features)
     required = {
@@ -219,6 +320,7 @@ def build_model(
 
 
 def parameter_count(model: nn.Module) -> int:
+    """Count trainable scalar parameters (``requires_grad=True``) in ``model``."""
     return sum(
         parameter.numel() for parameter in model.parameters() if parameter.requires_grad
     )

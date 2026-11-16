@@ -84,4 +84,5 @@ const remoteApi = {
   },
 }
 
+/** Typed client routing to the static browser manifest (`VITE_OFFLINE_DEMO=true`) or loopback FastAPI service. */
 export const api = (isOfflineDemo ? offlineApi : remoteApi) as typeof remoteApi

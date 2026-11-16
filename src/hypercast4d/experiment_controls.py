@@ -19,6 +19,7 @@ def _stream_seed(seed: int, window: int, horizon: int, fold: int, role: str) -> 
 
 
 def state_digest(module: nn.Module) -> str:
+    """Compute a deterministic SHA-256 digest of ``module.state_dict()`` shapes, dtypes, and bytes."""
     digest = hashlib.sha256()
     for name, value in sorted(module.state_dict().items()):
         digest.update(name.encode())

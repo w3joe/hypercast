@@ -6,8 +6,11 @@ sequence representation for the surrounding playground architecture, not a claim
 that an arbitrary hybrid reproduces the published end-to-end model.
 """
 
+from __future__ import annotations
+
 from importlib import import_module
 from types import SimpleNamespace
+from typing import Any
 
 import torch
 from torch import nn
@@ -24,11 +27,24 @@ UPSTREAM_MODELS = {
 }
 
 
-def upstream_defaults(method: str) -> dict:
-    """Only expose settings actually used by the selected forecasting path."""
+def upstream_defaults(method: str) -> dict[str, Any]:
+    """Return editable hyperparameter defaults active for TSLib model ``method``.
+
+    Parameters
+    ----------
+    method : str
+        Lowercase TSLib model key from ``UPSTREAM_MODELS`` (for example
+        ``"tsmixer"`` or ``"patchtst"``).
+
+    Returns
+    -------
+    dict[str, Any]
+        Subset of ``{"d_model", "dropout", "num_layers", "n_heads"}`` actually
+        consulted by ``method``'s forecasting path.
+    """
     if method in {'dlinear', 'frets', 'film', 'scinet'}:
         return {}
-    defaults = {'d_model': 32}
+    defaults: dict[str, Any] = {'d_model': 32}
     if method != 'lightts':
         defaults['dropout'] = 0.1
     if method not in {'lightts', 'segrnn', 'micn'}:
@@ -40,6 +56,7 @@ def upstream_defaults(method: str) -> dict:
 
 def upstream_config(steps: int, width: int, d_model: int, num_layers: int,
                     n_heads: int, dropout: float) -> SimpleNamespace:
+    """Build the TSLib ``SimpleNamespace`` configuration object for ``Model(configs)``."""
     return SimpleNamespace(
         task_name="long_term_forecast", seq_len=steps, pred_len=steps,
         label_len=steps // 2, enc_in=width, dec_in=width, c_out=width,
@@ -85,10 +102,12 @@ class UpstreamSequence(nn.Module):
         self.internal_targets = apply_internal_overrides(self.model, internal_overrides or {}, excluded)
 
     def prepare_input(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Left-replicate-pad ``[B, steps, width]`` to ``[B, padded_steps, width]``."""
         return F.pad(inputs.transpose(1, 2), (self.padded_steps - self.steps, 0),
                      mode="replicate").transpose(1, 2)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Run the wrapped TSLib core and return ``[B, steps, width]``."""
         history = self.prepare_input(inputs)
         output = self.model(history, None, torch.zeros_like(history), None)
         if isinstance(output, tuple):

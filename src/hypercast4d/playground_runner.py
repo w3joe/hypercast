@@ -103,6 +103,21 @@ def _positive_float(value: Any, name: str) -> float:
 
 
 def normalize_evaluation(raw: dict[str, Any] | None) -> dict[str, Any]:
+    """Validate and canonicalize playground/CLI evaluation settings.
+
+    Parameters
+    ----------
+    raw : dict[str, Any] or None
+        User-supplied evaluation dictionary overriding ``preset`` defaults
+        (``"quick"``, ``"standard"``, or ``"robust"``).
+
+    Returns
+    -------
+    dict[str, Any]
+        Canonical evaluation configuration with validated ``cells``, ``seeds``,
+        ``epochs``, batch sizes, Adam hyperparameters, ``loss``, ``device``,
+        ``folds``, and safe relative ``data_path`` under ``data/``.
+    """
     raw = raw or {}
     preset_name = str(raw.get("preset", "quick"))
     if preset_name not in EVALUATION_PRESETS:
@@ -265,6 +280,7 @@ def normalize_evaluation(raw: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def resolve_device(name: str) -> torch.device:
+    """Resolve ``'auto'``, ``'cpu'``, ``'mps'``, or ``'cuda'`` to a verified ``torch.device``."""
     if name == "auto":
         if torch.cuda.is_available():
             return torch.device("cuda")
@@ -395,6 +411,7 @@ def _fit_kwargs(evaluation: dict[str, Any], device: torch.device) -> dict[str, A
 
 
 def run_validation(job_dir: Path, request: dict[str, Any]) -> None:
+    """Execute validation trials across all configured ``cells``, ``folds``, and ``seeds``."""
     evaluation = normalize_evaluation(request.get('evaluation'))
     if evaluation.get('remaining_tuning') or evaluation.get('remaining_replication'):
         from .remaining_batch import run_batch
@@ -602,6 +619,7 @@ def _final_datasets(
 
 
 def run_final_test(job_dir: Path, request: dict[str, Any]) -> None:
+    """Refit on the first 85% of rows and evaluate the held-out final 15% test partition."""
     architecture = normalize_architecture_spec(request["architecture"])
     evaluation = normalize_evaluation(request.get("evaluation"))
     if evaluation.get('initialization') == 'internal-matched-v1' or evaluation.get('nested_stopping'):
@@ -737,6 +755,7 @@ def run_final_test(job_dir: Path, request: dict[str, Any]) -> None:
 
 
 def run_job(job_dir: Path) -> None:
+    """Read ``job_dir/request.json`` and run either ``validation`` or ``final_test``."""
     request = json.loads((job_dir / "request.json").read_text(encoding="utf-8"))
     started = datetime.now(UTC).isoformat()
     _status(job_dir, state="starting", started_at=started, error=None)
@@ -752,6 +771,7 @@ def run_job(job_dir: Path) -> None:
 
 
 def main() -> None:
+    """Worker subprocess entry point for ``python -m hypercast4d.playground_runner``."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--job-dir", required=True, type=Path)
     args = parser.parse_args()

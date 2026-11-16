@@ -1,4 +1,4 @@
-"""Isolated Crossformer baseline search preceding the HyperDense site sweep."""
+"""[Internal Benchmark Protocol] Isolated Crossformer baseline search preceding the HyperDense site sweep."""
 from __future__ import annotations
 
 import hashlib
@@ -14,11 +14,14 @@ MODES = ("relative_residual", "levels_direct")
 
 
 def seed_stream(seed: int, role: str) -> int:
+    """Derive a deterministic 63-bit RNG seed for ``(seed, role)``."""
     digest = hashlib.sha256(f"{PROTOCOL}/{seed}/{role}".encode()).digest()
     return int.from_bytes(digest[:8], "big") % (2**63 - 1)
 
 
 class CrossformerBaseline(nn.Module):
+    """Seven-channel Crossformer wrapper supporting direct and relative-residual heads."""
+
     def __init__(self, *, window: int, horizon: int = 5, features: int = 7,
                  mode: str = "relative_residual", d_model: int = 32,
                  num_layers: int = 1, n_heads: int = 4, dropout: float = 0.1):
@@ -41,6 +44,7 @@ class CrossformerBaseline(nn.Module):
             nn.init.zeros_(self.output.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Compute 5-step forecasts from ``[batch, window, 7]``."""
         if x.ndim != 3 or x.shape[1:] != (self.window, self.features):
             raise ValueError(f"Expected [batch,{self.window},{self.features}]")
         anchor = x[:, -1, 0:1]
@@ -51,6 +55,7 @@ class CrossformerBaseline(nn.Module):
 
 
 def build(job: dict) -> CrossformerBaseline:
+    """Instantiate a seeded ``CrossformerBaseline`` from a study job dictionary."""
     with torch.random.fork_rng(devices=[]):
         torch.random.default_generator.manual_seed(seed_stream(job["seed"], "model"))
         return CrossformerBaseline(window=job["window"], mode=job["mode"],

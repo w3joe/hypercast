@@ -45,6 +45,7 @@ def precision_context(backbone):
 
 
 def normalize_replacement(value):
+    """Validate ``{"backbone": ..., "variant": ...}`` for ``remaining-internal-v1``."""
     if not isinstance(value, dict) or set(value) != {'backbone', 'variant'}:
         raise ValueError('replacement requires exactly backbone and variant')
     if value['backbone'] not in BACKBONES or value['variant'] not in VARIANTS:
@@ -54,21 +55,26 @@ def normalize_replacement(value):
 
 class ContiguousHyperDense(HyperDense):
     """Preserve Linear's output layout for upstream consumers that call view()."""
+
     def forward(self, x):
+        """Return contiguous hypercomplex projection output."""
         return super().forward(x).contiguous()
 
 
 class ChannelMap(nn.Module):
     """Exact kernel-one, stride-one, ungrouped Conv1d equivalent."""
+
     def __init__(self, mapping):
         super().__init__()
         self.mapping = mapping
 
     def forward(self, x):
+        """Apply channel-last ``mapping`` to ``[batch, channels, steps]``."""
         return self.mapping(x.transpose(1, 2)).transpose(1, 2)
 
 
 def digest_except(model, prefix):
+    """Compute SHA-256 of ``model.state_dict()`` excluding submodule ``prefix``."""
     digest = hashlib.sha256()
     for name, value in sorted(model.state_dict().items()):
         if name == prefix or name.startswith(prefix + '.'):
@@ -80,6 +86,7 @@ def digest_except(model, prefix):
 
 
 def dimensions(module):
+    """Return ``(in_features, out_features, has_bias)`` for Linear or 1x1 Conv1d."""
     if isinstance(module, nn.Linear):
         return module.in_features, module.out_features, module.bias is not None
     if isinstance(module, nn.Conv1d) and module.kernel_size == (1,) and module.stride == (1,) and module.padding == (0,) and module.groups == 1:
@@ -88,6 +95,7 @@ def dimensions(module):
 
 
 def build_case(backbone, variant, seed=907, window=32, horizon=5, fold=1):
+    """Build a paired native/controlled single-site TSLib model and audit report."""
     if backbone == 'film':
         if window != 32 or variant not in VARIANTS:
             raise ValueError('Unsupported FiLM replacement')
@@ -161,6 +169,7 @@ def build_case(backbone, variant, seed=907, window=32, horizon=5, fold=1):
 
 
 def initialize(model, architecture, evaluation, *, seed, window, horizon, fold):
+    """Apply ``remaining-internal-v1`` paired initialization to ``model``."""
     from .architecture import normalize_architecture_spec
     replacement = normalize_replacement(evaluation['replacement'])
     if architecture.get('schema_version', 1) != 1:
@@ -290,6 +299,7 @@ def _real_equivalence(backbone, device='cpu', training=False):
 
 
 def rectangular_reference_checks(device='cpu'):
+    """Verify rectangular ``ContiguousHyperDense`` forward/backward against dense blocks."""
     reports = []
     device = torch.device(device)
     with torch.random.fork_rng(devices=[device.index or 0] if device.type == 'cuda' else []):
@@ -317,6 +327,7 @@ def rectangular_reference_checks(device='cpu'):
 
 
 def cpu_preflight():
+    """Run offline CPU equivalence and pairing checks across all 11 backbones."""
     reports, equivalence = [], []
     for backbone in SITES:
         for training in (False, True):

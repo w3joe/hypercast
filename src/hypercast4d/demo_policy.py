@@ -27,12 +27,14 @@ MAX_BODY = 512_000
 
 
 def bounded_int(value: Any, label: str, low: int, high: int) -> int:
+    """Validate that ``value`` is an exact ``int`` within ``[low, high]``."""
     if type(value) is not int or not low <= value <= high:
         raise ValueError(f"Demo {label} must be an integer from {low} to {high}.")
     return value
 
 
 def cell(window: Any = 10, horizon: Any = 1) -> tuple[int, int]:
+    """Validate a ``(window, horizon)`` pair against public demo bounds."""
     return (bounded_int(window, "window", 2, LIMITS["window"]),
             bounded_int(horizon, "horizon", 1, LIMITS["horizon"]))
 
@@ -120,6 +122,7 @@ def _params(params: dict) -> None:
 
 
 def evaluation(raw: dict | None) -> dict:
+    """Validate and pin public-demo evaluation settings to ``quick`` synthetic bounds."""
     from .playground_runner import EVALUATION_DEFAULTS, normalize_evaluation
     raw = raw or {}
     if not isinstance(raw, dict):
@@ -154,6 +157,7 @@ def evaluation(raw: dict | None) -> dict:
 
 
 def execution(raw: dict | None) -> dict:
+    """Enforce the fixed single-L4, two-minute Modal execution target."""
     if raw is not None and (not isinstance(raw, dict) or any(
         key not in EXECUTION or value != EXECUTION[key] for key, value in raw.items()
     )):

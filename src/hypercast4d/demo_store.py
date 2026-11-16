@@ -18,10 +18,12 @@ from .demo_policy import LIMITS
 
 
 class LimitError(ValueError):
-    pass
+    """Raised when a visitor or shared demo quota limit is exceeded."""
 
 
 class DemoStore:
+    """SQLite-backed session, HMAC-digested identity, and quota store for the public demo."""
+
     def __init__(self, root: Path, pepper: str, *, persist=lambda: None, clock=time.time):
         if len(pepper) < 32:
             raise ValueError("DEMO_SESSION_SECRET must contain at least 32 random characters.")
@@ -43,6 +45,7 @@ class DemoStore:
 
     @contextmanager
     def transaction(self):
+        """Execute an ``IMMEDIATE`` SQLite transaction serialized by ``self.lock``."""
         # Modal API is deployed with max_containers=1 and strategy=recreate.
         # A process lock serializes requests; never mount this DB in GPU workers.
         with self.lock:
@@ -62,6 +65,7 @@ class DemoStore:
                 self.persist()
 
     def digest(self, text: str) -> str:
+        """Compute HMAC-SHA256 of ``text`` keyed by ``self.pepper``."""
         return hmac.new(self.pepper.encode(), text.encode(), hashlib.sha256).hexdigest()
 
     def _count(self, db, kind, owner, since):
@@ -80,10 +84,12 @@ class DemoStore:
         db.execute("INSERT INTO events VALUES (?, ?, ?)", (kind, owner, now))
 
     def period(self, monthly=False):
+        """Return the UTC start-of-day or start-of-month Unix timestamp."""
         now = datetime.fromtimestamp(self.clock(), UTC)
         return now.replace(day=1 if monthly else now.day, hour=0, minute=0, second=0, microsecond=0).timestamp()
 
     def challenge(self, email: str) -> tuple[str, str, str]:
+        """Issue a rate-limited 6-digit email verification challenge valid for 10 minutes."""
         email = email.strip().lower()
         if len(email) > 254 or not re.fullmatch(r"[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+", email):
             raise ValueError("Enter a valid email address.")
@@ -102,6 +108,7 @@ class DemoStore:
         return challenge_id, code, email
 
     def verify(self, challenge_id: str, code: str) -> str:
+        """Verify ``code`` against ``challenge_id`` (max 5 attempts) and mint a 7-day session token."""
         token = None
         with self.transaction() as db:
             row = db.execute("SELECT * FROM challenges WHERE id=?", (challenge_id,)).fetchone()
@@ -119,6 +126,7 @@ class DemoStore:
         return token
 
     def owner(self, token: str | None) -> str | None:
+        """Resolve a session cookie ``token`` to its HMAC owner digest, or ``None``."""
         if not token or len(token) > 128:
             return None
         with self.transaction() as db:
@@ -127,10 +135,12 @@ class DemoStore:
             return row[0] if row else None
 
     def logout(self, token: str):
+        """Invalidate session ``token`` immediately."""
         with self.transaction() as db:
             db.execute("DELETE FROM sessions WHERE digest=?", (self.digest(token),))
 
     def quota(self, owner: str):
+        """Return remaining daily runs for ``owner`` and global monthly availability."""
         with self.transaction() as db:
             used = self._count(db, "run", owner, self.period())
             monthly = self._count(db, "run", None, self.period(True))
@@ -138,6 +148,7 @@ class DemoStore:
                 "demo_available": monthly < LIMITS["runs_per_month_total"]}
 
     def reserve_inspection(self, owner):
+        """Enforce per-minute, daily, and monthly architecture-inspection rate limits."""
         with self.transaction() as db:
             self._reserve(db, "inspect", owner, [
                 (owner, self.clock() - 60, 20, "Please wait a minute before checking more architectures."),
@@ -161,6 +172,7 @@ class DemoStore:
                        (record["id"], owner, self.clock(), json.dumps(record, allow_nan=False)))
 
     def jobs(self, owner: str | None, *, active_only=False):
+        """List jobs for ``owner`` (or all owners when ``None``), newest first."""
         with self.transaction() as db:
             rows = db.execute("SELECT * FROM jobs" + (" WHERE owner=?" if owner else "") + " ORDER BY created DESC",
                               (owner,) if owner else ()).fetchall()
@@ -170,6 +182,7 @@ class DemoStore:
         return [r for r in result if not active_only or r["record"]["status"]["state"] in {"queued", "running", "starting"}]
 
     def job(self, owner, job_id):
+        """Fetch a single job owned by ``owner`` or raise ``KeyError``."""
         with self.transaction() as db:
             row = db.execute("SELECT * FROM jobs WHERE id=? AND owner=?", (job_id, owner)).fetchone()
         if not row:
@@ -177,11 +190,13 @@ class DemoStore:
         return {**dict(row), "record": json.loads(row["record"])}
 
     def update_job(self, job_id, record, call_id=None):
+        """Persist updated ``record`` JSON and optional Modal ``call_id``."""
         with self.transaction() as db:
             db.execute("UPDATE jobs SET record=?, call_id=COALESCE(?, call_id) WHERE id=?",
                        (json.dumps(record, allow_nan=False), call_id, job_id))
 
     def save_architecture(self, owner, spec, view=None, record_id=None):
+        """Save or update up to 20 private demo architectures for ``owner``."""
         record_id = str(uuid.UUID(record_id)) if record_id else str(uuid.uuid4())
         now = datetime.fromtimestamp(self.clock(), UTC).isoformat()
         with self.transaction() as db:
@@ -202,11 +217,13 @@ class DemoStore:
         return record
 
     def architectures(self, owner):
+        """List saved demo architectures for ``owner`` ordered by ``updated`` descending."""
         with self.transaction() as db:
             return [json.loads(row[0]) for row in db.execute(
                 "SELECT record FROM architectures WHERE owner=? ORDER BY updated DESC", (owner,))]
 
     def cleanup(self):
+        """Purge expired jobs, artifacts, architectures, sessions, challenges, and old quota events."""
         import shutil
         cutoff = self.clock() - LIMITS["retention_days"] * 86400
         with self.transaction() as db:

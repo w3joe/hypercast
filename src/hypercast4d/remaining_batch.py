@@ -86,6 +86,7 @@ def collect_artifacts(directory, trials):
 
 
 def run_batch(directory, request):
+    """Execute sequential tuning or replication child trials under a soft deadline."""
     from .playground_runner import normalize_evaluation, run_validation, _atomic_json, _status
     evaluation = normalize_evaluation(request['evaluation'])
     trials = trial_grid(evaluation)

@@ -12,6 +12,8 @@ MODES=('levels_direct','relative_residual')
 
 
 class NativeTransfer(nn.Module):
+    """Multi-channel MICN/FiLM wrapper for 32-step context and 5-step horizon."""
+
     def __init__(self,backbone,features=7,window=32,horizon=5,mode='levels_direct'):
         super().__init__()
         if backbone not in ('micn','film') or mode not in MODES or features<1 or window!=32 or horizon!=5:
@@ -24,6 +26,7 @@ class NativeTransfer(nn.Module):
             nn.init.zeros_(self.output.weight);nn.init.zeros_(self.output.bias)
 
     def forward(self,x):
+        """Forecast 5 target steps from ``[batch, 32, features]``."""
         if x.ndim!=3 or x.shape[1:]!=(32,self.features):raise ValueError('Wrong input shape')
         anchor=x[:,-1,0:1]
         y=x-x[:,-1:,:] if self.mode=='relative_residual' else x
@@ -33,6 +36,7 @@ class NativeTransfer(nn.Module):
 
 
 def build(backbone,seed,mode,features=7):
+    """Instantiate a deterministically seeded ``NativeTransfer`` model."""
     key=f'native-transfer-v1/{backbone}/{seed}/{features}/32/5'
     value=int.from_bytes(hashlib.sha256(key.encode()).digest()[:8],'big')%(2**63-1)
     with torch.random.fork_rng(devices=[]):

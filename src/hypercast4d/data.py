@@ -15,11 +15,35 @@ from .algebras import COMPONENT_COUNT
 
 @dataclass(frozen=True)
 class MinMaxStats:
+    """Training-partition min–max scaling statistics.
+
+    Constant columns (``span == 0``) substitute ``span = 1.0`` so constant
+    training features map cleanly to ``0.0`` without division by zero.
+
+    Parameters
+    ----------
+    minimum : numpy.ndarray
+        Per-column minimum array of shape ``(features,)``.
+    span : numpy.ndarray
+        Per-column positive range ``maximum - minimum`` of shape ``(features,)``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from hypercast4d.data import MinMaxStats
+    >>> scaler = MinMaxStats.fit(np.array([[10.0, 5.0], [20.0, 5.0]]))
+    >>> scaler.transform(np.array([[15.0, 5.0]])).tolist()
+    [[0.5, 0.0]]
+    >>> scaler.inverse_target(np.array([0.5])).tolist()
+    [15.0]
+    """
+
     minimum: np.ndarray
     span: np.ndarray
 
     @classmethod
     def fit(cls, values: np.ndarray) -> "MinMaxStats":
+        """Compute per-column min and span strictly from training rows ``values``."""
         minimum = np.nanmin(values, axis=0)
         maximum = np.nanmax(values, axis=0)
         span = maximum - minimum
@@ -27,19 +51,34 @@ class MinMaxStats:
         return cls(minimum=minimum, span=span)
 
     def transform(self, values: np.ndarray) -> np.ndarray:
+        """Scale ``values`` into ``[0, 1]`` relative to training extrema."""
         return (values - self.minimum) / self.span
 
     def inverse_target(self, values: np.ndarray, target_index: int = 0) -> np.ndarray:
+        """Map scaled predictions/targets back into original units for ``target_index``."""
         return values * self.span[target_index] + self.minimum[target_index]
 
 
 @dataclass(frozen=True)
 class WindowSplit:
+    """Sliding-window tensors and origin indices for a single chronological split.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        Scaled input windows of shape ``(samples, window, features)``.
+    y : numpy.ndarray
+        Scaled target horizons of shape ``(samples, horizon)``.
+    target_start : numpy.ndarray
+        0-based row index in the original ``DataFrame`` of lead-1 for each sample.
+    """
+
     x: np.ndarray
     y: np.ndarray
     target_start: np.ndarray
 
     def as_dataset(self) -> TensorDataset:
+        """Wrap ``(x, y)`` as a ``float32`` PyTorch ``TensorDataset``."""
         return TensorDataset(
             torch.as_tensor(self.x, dtype=torch.float32),
             torch.as_tensor(self.y, dtype=torch.float32),
@@ -48,6 +87,27 @@ class WindowSplit:
 
 @dataclass(frozen=True)
 class PreparedData:
+    """Leakage-safe chronological train/validation/test dataset bundle.
+
+    Parameters
+    ----------
+    train : WindowSplit
+        Training windows whose targets end at or before ``train_end``.
+    validation : WindowSplit
+        Validation windows whose targets lie strictly within
+        ``[train_end, validation_end)``.
+    test : WindowSplit
+        Held-out test windows whose targets start at or after ``validation_end``.
+    scaler : MinMaxStats
+        Min–max scaler fitted exclusively on ``frame.iloc[:train_end]``.
+    columns : tuple[str, ...]
+        Ordered column names (with ``target_column`` at index ``0`` when given).
+    train_end : int
+        Exclusive end row index of the raw training partition.
+    validation_end : int
+        Exclusive end row index of the raw validation partition.
+    """
+
     train: WindowSplit
     validation: WindowSplit
     test: WindowSplit
@@ -104,6 +164,7 @@ def load_paper_data(path: str | Path, target_column: str | None = None) -> pd.Da
 
 
 def _empty(window: int, horizon: int, features: int) -> WindowSplit:
+    """Create an empty ``WindowSplit`` placeholder with valid rank and dtypes."""
     return WindowSplit(
         x=np.empty((0, window, features), dtype=np.float32),
         y=np.empty((0, horizon), dtype=np.float32),

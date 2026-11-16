@@ -18,6 +18,7 @@ SITE = 'layers.0.model.spec_conv_1.0'
 
 class SpectralRealBlock(nn.Module):
     """Exact real-block implementation retaining the native complex parameter ties."""
+
     def __init__(self, original):
         super().__init__()
         self.weights_real = nn.Parameter(original.weights_real.detach().clone())
@@ -25,12 +26,14 @@ class SpectralRealBlock(nn.Module):
         self.modes, self.out_channels = original.modes, original.out_channels
 
     def apply_mode(self, a, k):
+        """Apply tied complex-block linear projection for frequency mode ``k``."""
         real, imag = self.weights_real[:, :, k], self.weights_imag[:, :, k]
         weight = torch.cat([torch.cat([real.T, -imag.T], dim=1),
                             torch.cat([imag.T, real.T], dim=1)], dim=0)
         return F.linear(torch.cat([a.real, a.imag], dim=-1), weight)
 
     def forward(self, x):
+        """Transform ``x`` via rFFT, per-mode real-block maps, and irFFT."""
         spectrum = torch.fft.rfft(x)
         transformed = []
         for k in range(self.modes):
@@ -45,6 +48,7 @@ class SpectralRealBlock(nn.Module):
 
 class StructuredSpectral(SpectralRealBlock):
     """Replace each existing frequency map while preserving FFT, mask and inverse FFT."""
+
     def __init__(self, original, variant):
         nn.Module.__init__(self)
         self.modes, self.out_channels = original.modes, original.out_channels
@@ -71,10 +75,12 @@ class StructuredSpectral(SpectralRealBlock):
             self.maps.append(layer)
 
     def apply_mode(self, a, k):
+        """Apply learned structured map ``k`` to concatenated ``(a.real, a.imag)``."""
         return self.maps[k](torch.cat([a.real, a.imag], dim=-1))
 
 
 def native(seed=907, window=32, horizon=5, fold=1):
+    """Instantiate a seeded native ``tslib-film`` model."""
     with torch.random.fork_rng(devices=[]):
         key = f'remaining-internal-v1/film/{seed}/{window}/{horizon}/{fold}/native'
         torch.random.default_generator.manual_seed(int.from_bytes(hashlib.sha256(key.encode()).digest()[:8], 'big') % (2**63-1))
@@ -83,6 +89,7 @@ def native(seed=907, window=32, horizon=5, fold=1):
 
 
 def build_case(variant, seed=907, window=32, horizon=5, fold=1):
+    """Build a FiLM model with ``variant`` installed at ``spec_conv_1.0``."""
     if variant not in VARIANTS:
         raise ValueError('Unknown FiLM variant')
     model = native(seed, window, horizon, fold)
@@ -96,6 +103,7 @@ def build_case(variant, seed=907, window=32, horizon=5, fold=1):
 
 
 def equivalence(training=False, device='cpu'):
+    """Verify exact equivalence between native FiLM complex conv and ``SpectralRealBlock``."""
     left, right = native(), native()
     original = left.get_submodule(SITE)
     right.layers[0].model.spec_conv_1[0] = SpectralRealBlock(original)
@@ -145,6 +153,7 @@ def structured_reference(device='cpu'):
 
 
 def preflight():
+    """Run CPU spectral replacement preflight checks across all 8 variants."""
     checks = [equivalence(training) for training in (False, True)]
     shared = None
     rows = []

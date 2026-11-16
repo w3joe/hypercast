@@ -63,6 +63,8 @@ CANDIDATE_COLUMNS = (
 
 @dataclass(frozen=True)
 class PaperWindows:
+    """Globally scaled overlapping windows matching the supplementary notebook."""
+
     features: np.ndarray
     targets: np.ndarray
     columns: tuple[str, ...]
@@ -136,6 +138,7 @@ def prepare_paper_windows(
 
 
 def candidate_grids(search_spaces: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """Expand ``search_spaces`` in the exact ``ParameterGrid`` order of ``AnalysisGoogle.ipynb``."""
     if set(search_spaces) != set(MODEL_TYPES):
         raise ValueError(f"search_spaces must contain exactly {MODEL_TYPES}")
 
@@ -262,6 +265,24 @@ def _status(
 def run_reproduction(
     config: dict[str, Any], quick: bool = False
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Execute the archived notebook's ``GridSearchCV`` reproduction protocol.
+
+    Parameters
+    ----------
+    config : dict[str, Any]
+        Parsed YAML configuration (following ``configs/paper_reproduction.yaml``).
+    quick : bool, default=False
+        Apply ``execution.quick`` smoke-test limits and write to ``*_quick``.
+
+    Returns
+    -------
+    folds_frame : pandas.DataFrame
+        Individual fold scores saved to ``folds.csv``.
+    candidates_frame : pandas.DataFrame
+        Mean/std cross-validation scores per candidate saved to ``candidates.csv``.
+    best : pandas.DataFrame
+        Lowest-scaled-MAE candidate per order, cell, and model saved to ``best.csv``.
+    """
     data_config = config["data"]
     cv_config = config["cross_validation"]
     training = config["training"]
@@ -568,6 +589,7 @@ def run_reproduction(
 
 
 def main() -> None:
+    """CLI entry point for ``hypercast4d-reproduce``."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config", type=Path, default=Path("configs/paper_reproduction.yaml")

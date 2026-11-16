@@ -10,6 +10,7 @@ import type {
   GraphViewState,
 } from './types'
 
+/** Browser-only static playground adapter backed by `offline-manifest.json`, `offline-results.json`, and `localStorage`. */
 type PresetEntry = {
   graph: GraphSpec
   graph_nodes: Record<string, GraphNodeInfo>

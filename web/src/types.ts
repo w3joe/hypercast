@@ -1,33 +1,54 @@
+/** Scalar or integer-list parameter map attached to a Schema v1 pipeline layer. */
 export type LayerParams = Record<string, string | number | number[]>
 
+/** Executable operator node inside a Schema v2 directed acyclic graph (`GraphSpec`). */
 export type GraphNodeSpec = {
+  /** Unique node identifier within the graph. */
   id: string
+  /** Operator type (`'source'` for lowered FX nodes or a palette operator in `NEW_OPS`). */
   kind: string
+  /** Operator-specific hyperparameters (such as `units`, `algebra`, `shape_mode`, `bias`). */
   params: Record<string, unknown>
+  /** Binding to an FX node inside `GraphSpec.sources` when `kind === 'source'`. */
   source_ref?: { source: string; node: string }
+  /** Shared submodule weight key; nodes sharing `module_ref` share `nn.Module` parameters. */
   module_ref?: string
+  /** Optional stage group ID for collapsible overview rendering. */
   group?: string
+  /** Optional human-readable canvas label. */
   label?: string
 }
+/** Directed tensor connection wiring `source` output to named input `port` on `target`. */
 export type GraphEdgeSpec = { source: string; target: string; port: string }
+/** Schema v2 executable architecture DAG specification shared by Python and browser tools. */
 export type GraphSpec = {
   schema_version: 2
+  /** Pinned lowering/TSLib template revision string. */
   revision: string
   name: string
+  /** Initialization/constant v1 source recipes keyed by source ID (e.g. `'s0'`). */
   sources: Record<string, ArchitectureSpec>
   nodes: GraphNodeSpec[]
   edges: GraphEdgeSpec[]
   groups: { id: string; label: string }[]
+  /** Node ID designated as the `[batch, horizon]` forecast output. */
   output: string
   locked?: boolean
   preset_id?: string
 }
+/** Canvas viewport pan and zoom state. */
 export type DiagramCamera = { panX: number; panY: number; zoom: number }
+/** Presentation-only canvas layout/collapse state persisted alongside a `GraphSpec`. */
 export type GraphViewState = { positions: Record<string, { x: number; y: number }>; collapsed: string[]; expandedStages?: string[]; direction?: 'LR'; renderer?: 'flow' | 'three'; version?: 1; camera?: DiagramCamera }
+/** Auto-fit zero-padding and output-cropping diagnostics emitted by `ShapePreservingHyperDense`. */
 export type ShapeFit = { axis: number; input_width: number; padded_width: number; units: number; output_width: number; padding: number; crop: number }
+/** Per-node port, label, parameter, and validated tensor-shape metadata returned by `/api/v1/architectures/validate`. */
 export type GraphNodeInfo = { label: string; ports: string[]; shape: unknown; settings: Record<string, unknown>; category: string; source_path?: string; shape_fit?: ShapeFit }
+/** Validation response returned for a Schema v2 `GraphSpec`. */
 export type GraphValidation = { valid: boolean; spec: GraphSpec; parameters: number; graph_nodes: Record<string, GraphNodeInfo>; warnings: string[] }
+/** Static port and parameter contracts returned by `/api/v1/architectures/describe` or the offline manifest. */
 export type GraphDescription = { graph_nodes: Record<string, GraphNodeInfo>; parameters?: number | null; warnings?: string[]; reference?: boolean }
+/** Persisted architecture record returned by `/api/v1/architectures`. */
 export type GraphRecord = { id: string; spec: GraphSpec | ArchitectureSpec; view?: GraphViewState }
 
 export type InternalOverride = {
@@ -63,6 +84,7 @@ export type LayerSpec = {
   internal_overrides?: Record<string, InternalOverride>
 }
 
+/** Schema v1 sequential pipeline specification. */
 export type ArchitectureSpec = {
   schema_version: number
   name: string

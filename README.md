@@ -27,6 +27,29 @@ and reproduction path remain the original four-dimensional experiment.
 This project is only about the 4D hypercomplex paper. It has no connection to
 Numerion.
 
+## Documentation and API reference
+
+Comprehensive library, mathematical, configuration, and API documentation is
+available in [`docs/`](docs/index.md):
+
+- [Documentation Overview](docs/index.md) and [Quickstart & Tutorials](docs/quickstart.md)
+- [Algorithms & Mathematics](docs/algorithms.md) (multiplication tables, block-matrix equivalence, FX lowering, chronological splits, and diagnostics)
+- [Supported Components & Models](docs/components.md) (all layers, graph operators, TSLib-15 adapters, and 25 presets)
+- [Schemas, YAML & REST API Reference](docs/configuration.md) and [CLI Reference](docs/cli.md)
+- [Extending HyperCAST](docs/extending.md) (adding custom algebras, layers, and forecasting backbones)
+- [Python API Reference](docs/api/index.md) (module-by-module class and function reference)
+
+To browse the rendered documentation site locally with search and KaTeX math:
+
+```bash
+python -m pip install -e '.[docs]'
+mkdocs serve
+```
+
+When `hypercast4d-playground` is running, interactive OpenAPI / Swagger UI
+documentation for all `/api/v1/*` endpoints is also served at
+`http://127.0.0.1:8765/docs`.
+
 ## Run it now on this machine
 
 The environment and paper dataset are already prepared in this workspace. Open
@@ -706,19 +729,28 @@ ignored by Git, so overwriting them cannot be recovered through Git history.
 
 ```text
 hypercast4d/
+├── mkdocs.yml                    # Documentation site & API reference config
+├── docs/                         # User guides, math reference, and API docs
 ├── configs/evaluation.yaml          # Default experiment settings
 ├── configs/paper_reproduction.yaml # Released-notebook protocol and full grids
 ├── src/hypercast4d/
-│   ├── algebras.py               # 4D multiplication tables
-│   ├── layers.py                 # HyperDense implementation
-│   ├── data.py                   # Leakage-safe data preparation
-│   ├── models.py                 # Seven forecasting models
-│   ├── architecture.py           # Composable model schema and compiler
-│   ├── training.py               # Training and metrics
+│   ├── algebras.py               # 2D, 3D, 4D, and 8D real algebras
+│   ├── layers.py                 # HyperDense & ShapePreservingHyperDense
+│   ├── architecture.py           # Schema v1 pipeline compiler, catalog & presets
+│   ├── graph_lowering.py         # Symbolic PyTorch FX lowering & TSLib kernels
+│   ├── graph_architecture.py     # Schema v2 executable DAG compiler
+│   ├── model_editing.py          # Atomic edits, wiring & Dense-HyperDense swaps
+│   ├── models.py                 # Canonical Figure 3 paper models
+│   ├── upstream_models.py        # Pinned TSLib-15 sequence adapters
+│   ├── data.py                   # Leakage-safe chronological data preparation
+│   ├── training.py               # Seeded training, benchmarks, and metrics
+│   ├── diagnostics.py            # Per-lead directional & large-move diagnostics
+│   ├── visualizations.py         # Exact component & block-matrix snapshots
 │   ├── experiment.py             # Evaluation CLI and result generation
 │   ├── reproduction.py           # Complete released-notebook grid-search CLI
-│   ├── playground.py             # Local API, queue and static app server
+│   ├── playground.py             # Local FastAPI server, queue & OpenAPI (/docs)
 │   ├── playground_runner.py      # Isolated validation/test worker
+│   ├── cli.py                    # Unified `hypercast` model & experiment CLI
 │   ├── dashboard.py              # Legacy dashboard API compatibility
 │   └── download.py               # Supplement downloader and verification
 ├── web/                          # React/TypeScript playground source

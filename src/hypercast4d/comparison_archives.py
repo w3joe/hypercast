@@ -1,4 +1,7 @@
 """Read-only adapters for completed research archives, never executable jobs."""
+
+from __future__ import annotations
+
 from collections import defaultdict
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -6,6 +9,7 @@ import csv
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -129,12 +133,24 @@ def _load(source, dataset, plan_path, version):
     return records, forecasts
 
 
-def list_archives(root: Path, project: Path):
+def list_archives(root: Path, project: Path) -> list[dict[str, Any]]:
+    """Load and verify all registered comparison archives under ``root/comparison-archives``."""
     return [record for source, dataset, plan, version in _registered(root, project)
             for record in _load(source, dataset, plan, version)[0]]
 
 
-def read_archive_forecasts(root: Path, project: Path, record_id: str, *, window: int, horizon: int, seed: int, fold: int, lead: int):
+def read_archive_forecasts(
+    root: Path,
+    project: Path,
+    record_id: str,
+    *,
+    window: int,
+    horizon: int,
+    seed: int,
+    fold: int,
+    lead: int,
+) -> dict[str, Any]:
+    """Read up to 2,000 point forecasts from a verified comparison archive ``.npz``."""
     if not 1 <= lead <= horizon or window < 1:
         raise ValueError('Invalid forecast cell or lead')
     for source, dataset, plan, version in _registered(root, project):

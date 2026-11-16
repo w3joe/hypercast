@@ -34,6 +34,7 @@ def send_code(email, code):
 
 def create_demo_app(root: Path, gateway, *, origin: str, pepper: str,
                     mailer=send_code, persist=lambda: None):
+    """Create the restricted public-demo FastAPI application with origin, body-size, and email-session guards."""
     parsed = urlparse(origin)
     if parsed.scheme != "https" or not parsed.netloc or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
         raise ValueError("DEMO_PUBLIC_ORIGIN must be the exact HTTPS frontend origin.")

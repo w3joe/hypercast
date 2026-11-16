@@ -15,10 +15,12 @@ ARTIFACTS = {"summary.json", "runs.csv", "per_lead.csv", "predictions.csv", "wei
 
 
 def now():
+    """Return the current UTC timestamp in ISO-8601 format."""
     return datetime.now(UTC).isoformat()
 
 
 def csv_rows(data):
+    """Parse UTF-8 CSV bytes into dictionaries with finite numeric coercion."""
     rows = []
     for raw in csv.DictReader(io.StringIO(data.decode())):
         row = {}
@@ -33,10 +35,13 @@ def csv_rows(data):
 
 
 class DemoJobs:
+    """Coordinator for quota-reserved asynchronous Modal demo jobs."""
+
     def __init__(self, store, gateway):
         self.store, self.gateway = store, gateway
 
     def submit(self, owner, payload):
+        """Validate ``payload`` under demo limits, reserve quota, and spawn a remote worker."""
         spec = policy.architecture(payload["architecture"])
         evaluation = policy.evaluation(payload.get("evaluation"))
         execution = policy.execution(payload.get("execution"))
@@ -64,6 +69,7 @@ class DemoJobs:
         return record
 
     def refresh(self, owner):
+        """Poll active Modal calls, materialize bounded artifacts, and expire stale runs."""
         # One API process; serialize result materialization and cancel races.
         with self.store.lock:
             for row in self.store.jobs(owner, active_only=True):
@@ -103,6 +109,7 @@ class DemoJobs:
                 self.store.update_job(job_id, record)
 
     def cancel(self, owner, job_id):
+        """Cancel an active demo job owned by ``owner``."""
         with self.store.lock:
             row = self.store.job(owner, job_id)
             record = row["record"]
@@ -114,6 +121,7 @@ class DemoJobs:
             return record
 
     def artifact(self, owner, job_id, filename):
+        """Verify ``owner`` owns ``job_id`` and return the allowlisted artifact ``Path``."""
         self.store.job(owner, job_id)  # Ownership check before looking at any filesystem path.
         if filename not in ARTIFACTS | {"training.log"}:
             raise KeyError(filename)

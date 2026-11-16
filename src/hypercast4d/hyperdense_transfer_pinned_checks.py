@@ -1,4 +1,4 @@
-"""Synthetic gates for the versioned transfer controls; no evaluation data."""
+"""[Internal Benchmark Protocol] Synthetic numerical gates for pinned-constant transfer controls."""
 from copy import deepcopy
 import torch
 from torch import nn
@@ -10,12 +10,14 @@ from .training import seed_everything
 
 
 def expanded(layer):
+    """Return the effective real weight matrix of ``layer`` in ``(out, in)`` orientation."""
     if isinstance(layer,HyperDense):return explicit_real_matrix(layer).T
     if isinstance(layer,nn.Sequential):return layer[1].weight@layer[0].weight
     return layer.weight
 
 
 def real_surgery(backbone,device,training):
+    """Verify exact output, gradient, and Adam-step equivalence under native-weight surgery."""
     left,_=build(backbone,'native',2390);right=deepcopy(left);site=SITES[backbone]
     if backbone=='film':right.layers[0].model.spec_conv_1[0]=SpectralRealBlock(right.get_submodule(site))
     else:
@@ -36,6 +38,7 @@ def real_surgery(backbone,device,training):
 
 
 def structured_reference(backbone,arm,device):
+    """Verify forward and backward equivalence against explicit dense block matrices."""
     model,_=build(backbone,arm,2391);layer=model.get_submodule(SITES[backbone]).double().to(device)
     if backbone=='micn':
         x=torch.linspace(-.5,.7,64,device=device,dtype=torch.float64).reshape(2,32).requires_grad_()
@@ -56,6 +59,7 @@ def structured_reference(backbone,arm,device):
 
 
 def continuation_gate(device):
+    """Verify exact checkpoint pause/resume trajectory equivalence on a synthetic model."""
     import tempfile
     from pathlib import Path
     from torch.utils.data import TensorDataset
@@ -75,6 +79,7 @@ def continuation_gate(device):
 
 
 def gate(device='cpu'):
+    """Run all synthetic surgery, structured-reference, and continuation gates."""
     torch.set_num_threads(2);rows=[];equivalence=[];references=[]
     with ieee_precision():
         for backbone in SITES:

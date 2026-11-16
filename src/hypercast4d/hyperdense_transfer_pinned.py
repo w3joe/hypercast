@@ -1,4 +1,4 @@
-"""Pin FiLM numerical constants across CPU hosts; preserve learned initialization."""
+"""[Internal Benchmark Protocol] Pin FiLM Legendre constants across CPU/GPU hosts."""
 from pathlib import Path
 import hashlib
 import torch
@@ -8,12 +8,14 @@ from .remaining_controls import digest_except
 CONSTANTS_SHA256="643b6e3339570a3668ac8c0f2d0ad95fff9ba9b0b61fc330ffe7b948b76ad491"
 
 def constants():
+    """Load and SHA-256-verify the pinned FiLM Legendre projection buffers."""
     path=Path(__file__).parent/'_constants/film_legendre_v1.pt'
     if hashlib.sha256(path.read_bytes()).hexdigest()!=CONSTANTS_SHA256:raise ValueError('Canonical FiLM constants changed')
     return torch.load(path,weights_only=True,map_location='cpu')
 
 
 def build(backbone,arm,seed,gain=1.):
+    """Build a transfer model with pinned FiLM ``.legts.`` buffers when ``backbone == 'film'``."""
     model,report=unpinned_build(backbone,arm,seed,gain)
     if backbone=='film':
         values=constants();buffers=dict(model.named_buffers())

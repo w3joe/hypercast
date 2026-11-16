@@ -137,6 +137,7 @@ if modal is not None:
     def execute_remote(
         request_json: str, dataset: bytes, parent_runs: bytes | None
     ) -> dict[str, Any]:
+        """Execute a serialized playground job inside an isolated Modal container."""
         result = _execute_payload(request_json, dataset, parent_runs)
         print(result["log"], end="", flush=True)
         return result
@@ -248,6 +249,7 @@ def run_modal_job(job_dir: Path) -> None:
 
 
 def main() -> None:
+    """Worker subprocess entry point for ``python -m hypercast4d.modal_runner``."""
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)

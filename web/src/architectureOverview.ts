@@ -97,6 +97,7 @@ export function architectureOverview(graph: GraphSpec, info: Record<string, Grap
   return { graph: { ...graph, groups: summaries.map(({ id, label }) => ({ id, label })), nodes: graph.nodes.map(n => ({ ...n, group: membership.get(n.id) })) }, stages: summaries, membership, tuckedNodeIds }
 }
 
+/** Compute the collapsed group IDs corresponding to non-expanded overview stages. */
 export function overviewView(overview: ArchitectureOverview, view: GraphViewState): GraphViewState {
   return { ...view, collapsed: overview.stages.filter(s => !(view.expandedStages ?? []).includes(s.id)).map(s => s.id) }
 }

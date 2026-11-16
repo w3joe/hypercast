@@ -23,6 +23,7 @@ VARIANTS = ('native', 'real', 'complex', 'quaternion', 'octonion', 'rank8', 'ran
 
 
 def variant_spec(native, variant):
+    """Construct a single-site controlled Schema v2 graph variant from ``native``."""
     if variant not in VARIANTS:
         raise ValueError('Unknown internal variant')
     spec = deepcopy(native)
@@ -56,6 +57,7 @@ def _seed(seed, window, horizon, fold, role):
 
 
 def initialize(model, architecture, *, seed, window, horizon, fold):
+    """Pair untouched node weights to ``native`` and initialize the selected internal site."""
     if architecture.get('schema_version') != 2 or set(architecture['sources']) != {'s0'} or window != 32:
         raise ValueError('internal-matched-v1 requires a single-source graph and window 32')
     if any(p.device.type != 'cpu' for p in model.parameters()):

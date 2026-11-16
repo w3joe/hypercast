@@ -18,9 +18,12 @@ SITES = {**{'dlinear':'Linear_Seasonal', 'tsmixer':'model.0.temporal.0',
 BACKBONES = tuple(SITES)
 
 def stream(seed, backbone, role):
+    """Derive a deterministic 63-bit RNG seed for the TSLib-15 ETTh1 study."""
     return int.from_bytes(hashlib.sha256(f'{PROTOCOL}/{seed}/{backbone}/{role}'.encode()).digest()[:8], 'big') % (2**63-1)
 
 class Transfer15(NativeTransfer):
+    """Seven-channel relative-residual wrapper for any of the 15 TSLib backbones."""
+
     def __init__(self, backbone):
         nn.Module.__init__(self)
         self.features, self.mode = 7, 'relative_residual'
@@ -29,6 +32,7 @@ class Transfer15(NativeTransfer):
         nn.init.zeros_(self.output.weight); nn.init.zeros_(self.output.bias)
 
 def build(backbone, arm, seed):
+    """Build a paired TSLib-15 ``(backbone, arm, seed)`` model and provenance report."""
     if backbone not in SITES or arm not in ARMS: raise ValueError('Unknown model/arm')
     with torch.random.fork_rng(devices=[]):
         torch.random.default_generator.manual_seed(stream(seed,backbone,'native'))
@@ -74,10 +78,12 @@ def build(backbone, arm, seed):
         constants_sha256=CONSTANTS_SHA256 if backbone=='film' else None)
 
 def replace(model,site,value):
+    """Replace dotted submodule ``site`` on ``model`` with ``value``."""
     parent,_,key=site.rpartition('.');model.get_submodule(parent)._modules[key]=value
 
 @contextmanager
 def cudnn_enabled(enabled):
+    """Temporarily set ``torch.backends.cudnn.enabled`` and restore on exit."""
     previous=torch.backends.cudnn.enabled
     try:
         torch.backends.cudnn.enabled=enabled

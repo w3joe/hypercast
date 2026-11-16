@@ -1,4 +1,13 @@
-"""Unified model editing and single-experiment command line interface."""
+"""Unified model editing and single-experiment command-line interface.
+
+Exposes the ``hypercast`` command with five subcommand groups (``model``,
+``layer``, ``graph``, ``experiment``, ``job``, and ``server``) sharing the
+exact YAML/JSON schemas and loopback job service used by the browser
+playground.
+"""
+
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -6,6 +15,7 @@ from pathlib import Path
 import shutil
 import sys
 import time
+from typing import Any
 import urllib.error
 
 import yaml
@@ -18,7 +28,8 @@ from .playground_runner import normalize_evaluation
 from .workspace_runtime import request, discover, ensure_backend, stop_backend
 
 
-def emit(value, machine=False):
+def emit(value: Any, machine: bool = False) -> None:
+    """Print ``value`` to stdout as strict JSON (``--json``) or human-readable YAML/text."""
     if machine:
         print(json.dumps(value, allow_nan=False))
     elif isinstance(value, str):
@@ -27,8 +38,9 @@ def emit(value, machine=False):
         print(yaml.safe_dump(value, sort_keys=False, allow_unicode=True).rstrip())
 
 
-def assignments(values):
-    result = {}
+def assignments(values: list[str] | None) -> dict[str, Any]:
+    """Parse repeatable ``key=value`` CLI flags using ``yaml.safe_load``."""
+    result: dict[str, Any] = {}
     for pair in values or []:
         key, separator, value = pair.partition('=')
         if not separator or not key or key in result:
@@ -38,7 +50,8 @@ def assignments(values):
     return result
 
 
-def parse_cells(value):
+def parse_cells(value: str) -> list[dict[str, int]]:
+    """Parse comma-separated ``window/horizon`` pairs (for example ``'10/1,20/5'``)."""
     try:
         cells = [{'window': int(pair.split('/')[0]), 'horizon': int(pair.split('/')[1])} for pair in value.split(',')]
         if any(len(pair.split('/')) != 2 for pair in value.split(',')):
@@ -48,14 +61,16 @@ def parse_cells(value):
         raise ValueError('Cells must be window/horizon pairs, e.g. 10/1,20/5') from error
 
 
-def globals_for(parser, defaults=False):
+def globals_for(parser: argparse.ArgumentParser, defaults: bool = False) -> None:
+    """Attach ``--project-root``, ``--results-root``, and ``--json`` options."""
     default = None if defaults else argparse.SUPPRESS
     parser.add_argument('--project-root', default=default)
     parser.add_argument('--results-root', default=default)
     parser.add_argument('--json', dest='machine', action='store_true', default=False if defaults else argparse.SUPPRESS)
 
 
-def parser():
+def parser() -> argparse.ArgumentParser:
+    """Construct the ``argparse.ArgumentParser`` hierarchy for ``hypercast``."""
     root = argparse.ArgumentParser(prog='hypercast', description=__doc__)
     globals_for(root, True)
     groups = root.add_subparsers(dest='group', required=True)
@@ -135,7 +150,8 @@ def parser():
     return root
 
 
-def evaluation_for(args):
+def evaluation_for(args: argparse.Namespace) -> dict[str, Any]:
+    """Merge ``--evaluation`` file, ``--eval`` overrides, and CLI flags into a normalized spec."""
     raw = yaml.safe_load(args.evaluation.read_text()) if args.evaluation else {}
     if not isinstance(raw, dict):
         raise ValueError('Evaluation file must contain an object')
@@ -160,7 +176,10 @@ def evaluation_for(args):
     return normalize_evaluation(raw)
 
 
-def confirmation(args, execution, *, final=False):
+def confirmation(
+    args: argparse.Namespace, execution: dict[str, Any], *, final: bool = False
+) -> None:
+    """Prompt for interactive confirmation on cloud or held-out ``final-test`` runs unless ``--yes``."""
     if not final and execution['target'] == 'local':
         return
     message = ('This evaluates the held-out test set once. ' if final else '')
@@ -171,7 +190,8 @@ def confirmation(args, execution, *, final=False):
         raise ValueError('Not submitted. Supply --yes to confirm non-interactively.')
 
 
-def wait_job(url, job_id):
+def wait_job(url: str, job_id: str) -> tuple[dict[str, Any], int]:
+    """Poll ``/api/v1/jobs/{job_id}`` until completion or ``KeyboardInterrupt``."""
     previous = None
     try:
         while True:
@@ -189,7 +209,8 @@ def wait_job(url, job_id):
         return {'job_id': job_id, 'detached': True}, 130
 
 
-def dispatch(args):
+def dispatch(args: argparse.Namespace) -> tuple[Any, int]:
+    """Execute a parsed ``hypercast`` CLI command and return ``(payload, exit_code)``."""
     project = Path(args.project_root or Path.cwd()).resolve()
     results = Path(args.results_root or project / 'results/playground')
     if not results.is_absolute():
@@ -360,7 +381,8 @@ def dispatch(args):
     raise ValueError('Unsupported command')
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
+    """Entry point for ``hypercast`` returning POSIX exit codes ``0, 2, 3, 4, 130``."""
     args = parser().parse_args(argv)
     try:
         value, code = dispatch(args)

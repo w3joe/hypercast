@@ -28,6 +28,7 @@ MEMBERS = {
 
 
 def sha256(path: Path) -> str:
+    """Compute the hexadecimal SHA-256 checksum of file ``path`` in 1 MiB chunks."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -40,6 +41,24 @@ def download(
     force: bool = False,
     allow_updated_source: bool = False,
 ) -> dict[str, str]:
+    """Download, checksum-verify, and extract the Springer Nature supplement archive.
+
+    Parameters
+    ----------
+    destination : Path
+        Target directory (typically ``data/raw``) receiving ``paper_data.xlsx``,
+        ``paper_summary.xlsx``, and ``checksums.json``.
+    force : bool, default=False
+        Re-download ``supplement.zip`` even if it already exists locally.
+    allow_updated_source : bool, default=False
+        Permit extraction if the publisher archive SHA-256 differs from
+        ``EXPECTED_ARCHIVE_SHA256``.
+
+    Returns
+    -------
+    dict[str, str]
+        Recorded URL and SHA-256 checksum manifest written to ``checksums.json``.
+    """
     destination.mkdir(parents=True, exist_ok=True)
     archive = destination / "supplement.zip"
     if force or not archive.exists():
@@ -91,6 +110,7 @@ def download(
 
 
 def main() -> None:
+    """CLI entry point for ``hypercast4d-download``."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", type=Path, default=Path("data/raw"))
     parser.add_argument("--force", action="store_true")

@@ -1,4 +1,21 @@
-"""Composable forecasting architectures used by the local playground."""
+"""Composable forecasting architectures used by the local playground and CLI.
+
+This module defines the **Schema v1** sequential pipeline specification and
+dispatches **Schema v2** executable DAG specifications to
+[`hypercast4d.graph_architecture`][hypercast4d.graph_architecture].
+
+Schema v1 Structure
+-------------------
+A Schema v1 specification is a JSON/YAML-serializable mapping with four keys:
+
+- ``name`` (``str``): human-readable title (1–80 characters).
+- ``input`` (``dict``): ``representation`` (``"levels"``, ``"centered"``, or
+  ``"differences"``) and ``feature_order`` (ordered subset of feature indices).
+- ``layers`` (``list[dict]``): ordered sequence of layer blocks ending in a
+  sequence-reduction block (``"last_state"``, ``"mean_pool"``, or ``"flatten"``).
+- ``head`` (``dict``): ``type`` (``"direct"``, ``"persistence_residual"``, or
+  ``"cumulative_residual"``) and ``zero_initialize`` (``bool``).
+"""
 
 from __future__ import annotations
 
@@ -33,16 +50,30 @@ RESEARCH_BLOCKS = {"decomposition", "patch_embedding", "temporal_attention",
 
 
 class ArchitectureError(ValueError):
-    """Raised when an architecture specification cannot be compiled."""
+    """Exception raised when an architecture specification cannot be compiled."""
 
 
 @dataclass(frozen=True)
 class TensorShape:
+    """Symbolic shape descriptor tracked across a v1 sequential pipeline.
+
+    Parameters
+    ----------
+    kind : {"sequence", "vector"}
+        Whether the tensor carries a temporal axis (``[B, T, C]``) or has been
+        reduced to a feature vector (``[B, C]``).
+    width : int
+        Feature channel count ``C`` on the last axis.
+    steps : int or None, default=None
+        Temporal length ``T`` when ``kind == "sequence"``, else ``None``.
+    """
+
     kind: str
     width: int
     steps: int | None = None
 
     def label(self) -> str:
+        """Format the symbolic tensor shape as ``[B, T, C]`` or ``[B, C]``."""
         if self.kind == "sequence":
             return f"[B, {self.steps}, {self.width}]"
         return f"[B, {self.width}]"
@@ -50,6 +81,24 @@ class TensorShape:
 
 @dataclass(frozen=True)
 class TraceEntry:
+    """Per-layer compilation record emitted during v1 pipeline construction.
+
+    Parameters
+    ----------
+    layer_id : str
+        Unique layer identifier within the pipeline.
+    layer_type : str
+        Canonical layer type key from ``LAYER_TYPES``.
+    input_shape : str
+        Formatted symbolic input shape (for example ``"[B, 10, 4]"``).
+    output_shape : str
+        Formatted symbolic output shape.
+    parameters : int
+        Number of trainable scalar parameters owned by this layer.
+    receptive_field : int
+        Cumulative temporal receptive field in input steps after this layer.
+    """
+
     layer_id: str
     layer_type: str
     input_shape: str
@@ -59,6 +108,7 @@ class TraceEntry:
 
 
 def _bounded_int(value: Any, name: str, minimum: int, maximum: int) -> int:
+    """Validate an exact integer parameter within ``[minimum, maximum]``."""
     if isinstance(value, bool):
         raise ArchitectureError(f"{name} must be an integer")
     try:
@@ -71,6 +121,7 @@ def _bounded_int(value: Any, name: str, minimum: int, maximum: int) -> int:
 
 
 def _bounded_float(value: Any, name: str, minimum: float, maximum: float) -> float:
+    """Validate a finite floating-point parameter within ``[minimum, maximum]``."""
     try:
         converted = float(value)
     except (TypeError, ValueError) as error:
@@ -81,7 +132,40 @@ def _bounded_float(value: Any, name: str, minimum: float, maximum: float) -> flo
 
 
 def normalize_architecture_spec(raw: dict[str, Any]) -> dict[str, Any]:
-    """Validate and canonicalize the serializable portion of a model spec."""
+    """Validate and canonicalize a Schema v1 pipeline or Schema v2 graph spec.
+
+    Parameters
+    ----------
+    raw : dict[str, Any]
+        User-supplied or deserialized architecture dictionary. When
+        ``raw.get("schema_version") == 2``, validation delegates to
+        [`normalize_graph`][hypercast4d.graph_architecture.normalize_graph].
+
+    Returns
+    -------
+    dict[str, Any]
+        Canonical specification with explicit defaults filled in and extraneous
+        keys stripped.
+
+    Raises
+    ------
+    ArchitectureError or ValueError
+        If the schema version, layer identifiers, parameter bounds, or input/head
+        options are malformed.
+
+    Examples
+    --------
+    >>> from hypercast4d.architecture import normalize_architecture_spec
+    >>> spec = normalize_architecture_spec({
+    ...     "name": "Quaternion MLP",
+    ...     "layers": [
+    ...         {"id": "h1", "type": "hyper_dense", "params": {"units": 4, "algebra": "quaternion"}},
+    ...         {"id": "flat", "type": "flatten"},
+    ...     ],
+    ... })
+    >>> spec["layers"][0]["params"]
+    {'units': 4, 'algebra': 'quaternion'}
+    """
     if not isinstance(raw, dict):
         raise ArchitectureError("architecture must be an object")
     if raw.get('schema_version') == 2:
@@ -170,6 +254,7 @@ def normalize_architecture_spec(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normalize_layer_params(layer_type: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Validate and populate default hyperparameters for ``layer_type``."""
     if layer_type.startswith("tslib_"):
         defaults = upstream_defaults(layer_type[6:])
         bounds = {"d_model": (8, 256), "num_layers": (1, 3), "n_heads": (1, 16)}
@@ -287,17 +372,50 @@ def _normalize_layer_params(layer_type: str, params: dict[str, Any]) -> dict[str
 
 
 class SequenceConv(nn.Module):
-    def __init__(self, in_channels: int, channels: int, kernel: int, dilation: int):
+    """Causal 1D convolution operating on channel-last ``[B, T, C]`` sequences.
+
+    Parameters
+    ----------
+    in_channels : int
+        Incoming feature width ``C_in``.
+    channels : int
+        Output feature width ``C_out``.
+    kernel : int
+        Temporal kernel width.
+    dilation : int
+        Temporal dilation factor.
+    """
+
+    def __init__(
+        self, in_channels: int, channels: int, kernel: int, dilation: int
+    ) -> None:
         super().__init__()
         self.conv = CausalConv1d(
             in_channels, channels, kernel_size=kernel, dilation=dilation
         )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Apply causal 1D convolution to ``[B, T, C_in]`` -> ``[B, T, C_out]``."""
         return self.conv(inputs.transpose(1, 2)).transpose(1, 2)
 
 
 class RecurrentSequence(nn.Module):
+    """Full-sequence LSTM or GRU block aligned with Keras bias conventions.
+
+    Parameters
+    ----------
+    kind : {"lstm", "gru"}
+        Recurrent cell family.
+    input_size : int
+        Incoming feature width ``C_in``.
+    hidden_size : int
+        Recurrent hidden width ``H``.
+    num_layers : int
+        Number of stacked recurrent layers (1–3).
+    dropout : float
+        Inter-layer dropout probability when ``num_layers > 1``.
+    """
+
     def __init__(
         self,
         kind: str,
@@ -322,12 +440,27 @@ class RecurrentSequence(nn.Module):
                 getattr(self.recurrent, f"bias_hh_l{layer}").requires_grad_(False)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Encode ``[B, T, C_in]`` into full hidden states ``[B, T, H]``."""
         sequence, _ = self.recurrent(inputs)
         return sequence
 
 
 class TemporalConvNet(nn.Module):
-    """Small causal residual TCN that retains the input sequence length."""
+    """Causal residual Temporal Convolutional Network preserving sequence length.
+
+    Parameters
+    ----------
+    input_width : int
+        Incoming channel width ``C_in``; projected to ``channels`` when unequal.
+    channels : int
+        Residual block channel width ``C``.
+    kernel_size : int
+        Causal convolution kernel width.
+    dilations : list[int]
+        Per-block dilation factors (for example ``[1, 2, 4, 8]``).
+    dropout : float
+        Post-activation dropout probability within each residual block.
+    """
 
     def __init__(
         self,
@@ -359,6 +492,7 @@ class TemporalConvNet(nn.Module):
         self.activation = nn.SiLU()
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Apply stacked causal residual blocks to ``[B, T, C_in]`` -> ``[B, T, C]``."""
         sequence = self.input_projection(inputs)
         for convolution, norm in zip(self.convolutions, self.norms, strict=True):
             residual = sequence
@@ -368,30 +502,51 @@ class TemporalConvNet(nn.Module):
 
 
 class SequencePool(nn.Module):
+    """Temporal 1D max-pooling adapter for channel-last ``[B, T, C]`` tensors.
+
+    Parameters
+    ----------
+    size : int
+        Pooling window length along the time axis.
+    stride : int
+        Pooling stride along the time axis.
+    """
+
     def __init__(self, size: int, stride: int) -> None:
         super().__init__()
         self.pool = nn.MaxPool1d(size, stride=stride)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Downsample ``[B, T, C]`` along the temporal dimension."""
         return self.pool(inputs.transpose(1, 2)).transpose(1, 2)
 
 
 class LastState(nn.Module):
+    """Reduce ``[B, T, C]`` to the most recent observation ``[B, C]``."""
+
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Select ``inputs[:, -1]``."""
         return inputs[:, -1]
 
 
 class MeanPool(nn.Module):
+    """Reduce ``[B, T, C]`` by averaging across the temporal axis ``[B, C]``."""
+
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Compute ``inputs.mean(dim=1)``."""
         return inputs.mean(dim=1)
 
 
 class FlattenSequence(nn.Module):
+    """Flatten ``[B, T, C]`` into a vector ``[B, T * C]``."""
+
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Flatten all axes after the batch dimension."""
         return inputs.flatten(start_dim=1)
 
 
 def _activation(kind: str) -> nn.Module:
+    """Instantiate a pointwise activation module by canonical name."""
     return {
         "relu": nn.ReLU,
         "gelu": nn.GELU,
@@ -404,6 +559,7 @@ def _activation(kind: str) -> nn.Module:
 def _build_layer(
     layer: dict[str, Any], shape: TensorShape
 ) -> tuple[nn.Module, TensorShape, int]:
+    """Instantiate one pipeline layer and compute its output shape and receptive-field delta."""
     layer_type = layer["type"]
     params = layer["params"]
     receptive_addition = 0
@@ -537,7 +693,27 @@ def _build_layer(
 
 
 class ExperimentalForecaster(nn.Module):
-    """Forecasting network compiled from an ArchitectureSpec."""
+    """Sequential forecasting network compiled from a Schema v1 specification.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Schema v1 architecture specification.
+    window : int
+        Historical input window length ``W >= 2``.
+    horizon : int
+        Forecast horizon ``H >= 1``.
+    features : int, default=COMPONENT_COUNT
+        Number of available input channels in the dataset.
+
+    Attributes
+    ----------
+    trace : list[TraceEntry]
+        Ordered compilation trace recording per-layer shapes, parameter counts,
+        and cumulative receptive fields.
+    receptive_field : int
+        Effective temporal receptive field in historical steps.
+    """
 
     def __init__(
         self,
@@ -645,6 +821,7 @@ class ExperimentalForecaster(nn.Module):
                         bias.data[hidden : 2 * hidden].fill_(1.0)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Forecast ``horizon`` target steps from ``[B, window, features]``."""
         anchor = inputs[:, -1, 0:1]
         sequence = inputs[..., list(self.feature_order)]
         if self.representation == "centered":
@@ -664,7 +841,36 @@ class ExperimentalForecaster(nn.Module):
 
 def build_architecture(
     spec: dict[str, Any], window: int, horizon: int, features: int = COMPONENT_COUNT
-) -> ExperimentalForecaster:
+) -> nn.Module:
+    """Compile a Schema v1 pipeline or Schema v2 graph into a PyTorch ``nn.Module``.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Architecture specification (Schema v1 sequential pipeline or Schema v2
+        executable graph).
+    window : int
+        Historical lookback window length ``W``.
+    horizon : int
+        Multi-step forecast horizon ``H``.
+    features : int, default=COMPONENT_COUNT
+        Number of raw input series per time step.
+
+    Returns
+    -------
+    ExperimentalForecaster or GraphForecaster
+        Executable PyTorch module mapping ``(batch, window, features)`` to
+        ``(batch, horizon)``.
+
+    Examples
+    --------
+    >>> import torch
+    >>> from hypercast4d.architecture import build_architecture, presets
+    >>> spec = next(p for p in presets() if p["preset_id"] == "paper-quaternion")
+    >>> model = build_architecture(spec, window=10, horizon=5)
+    >>> tuple(model(torch.randn(2, 10, 4)).shape)
+    (2, 5)
+    """
     if spec.get('schema_version') == 2:
         from .graph_architecture import GraphForecaster
         return GraphForecaster(spec, window, horizon, features)
@@ -674,11 +880,32 @@ def build_architecture(
 def validate_architecture(
     spec: dict[str, Any], window: int, horizon: int, features: int = COMPONENT_COUNT
 ) -> dict[str, Any]:
+    """Validate an architecture for ``(window, horizon)`` and return shape/parameter metadata.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Schema v1 or Schema v2 architecture specification.
+    window : int
+        Historical window length ``W``.
+    horizon : int
+        Forecast horizon ``H``.
+    features : int, default=COMPONENT_COUNT
+        Number of raw input channels.
+
+    Returns
+    -------
+    dict[str, Any]
+        Validation report containing ``valid``, normalized ``spec``,
+        ``input_shape``, ``output_shape``, trainable ``parameters``,
+        ``receptive_field``, and either sequential ``trace``/``internals`` (v1)
+        or ``graph_nodes``/``warnings`` (v2).
+    """
     if spec.get('schema_version') == 2:
         from .graph_architecture import validate_graph
         return validate_graph(spec, window, horizon, features)
     normalized = normalize_architecture_spec(spec)
-    model = build_architecture(normalized, window, horizon, features)
+    model = ExperimentalForecaster(normalized, window, horizon, features)
     input_steps = window - 1 if normalized["input"]["representation"] == "differences" else window
     return {
         "valid": True,
@@ -695,6 +922,25 @@ def validate_architecture(
 
 
 def architecture_hash(spec: dict[str, Any], evaluation: dict[str, Any] | None = None) -> str:
+    """Compute a deterministic SHA-256 digest of a canonicalized architecture.
+
+    Cosmetic metadata (such as human-readable ``name``, stage ``groups``, and
+    node display labels) is stripped prior to hashing so renaming a model does
+    not invalidate held-out test locks or experiment provenance.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Schema v1 or Schema v2 architecture specification.
+    evaluation : dict[str, Any] or None, default=None
+        Optional normalized evaluation/execution configuration to bind into the
+        candidate hash.
+
+    Returns
+    -------
+    str
+        64-character lowercase hexadecimal SHA-256 digest.
+    """
     if spec.get('schema_version') == 2:
         from .graph_architecture import graph_hash
         return graph_hash(spec, evaluation)
@@ -728,7 +974,15 @@ LAYER_TYPES = {
 
 
 def layer_catalog() -> dict[str, Any]:
-    """Return UI metadata without exposing arbitrary Python construction."""
+    """Return serializable layer categories, defaults, algebras, and head options.
+
+    Returns
+    -------
+    dict[str, Any]
+        Catalog consumed by the Playground UI and CLI, containing
+        ``schema_version``, grouped ``categories``, ``input_representations``,
+        ``head_types``, ``algebras``, ``algebra_dimensions``, and ``activations``.
+    """
     return {
         "schema_version": SCHEMA_VERSION,
         "categories": [
@@ -822,11 +1076,23 @@ def layer_catalog() -> dict[str, Any]:
 
 
 def _layer(layer_id: str, layer_type: str, **params: Any) -> dict[str, Any]:
+    """Construct a raw layer dictionary entry."""
     return {"id": layer_id, "type": layer_type, "params": params}
 
 
 def presets() -> list[dict[str, Any]]:
-    """Return reference and recommended architecture starting points."""
+    """Return the built-in catalog of 25 reference and editable forecasting presets.
+
+    Includes the five locked Figure 3 paper models (CNN, LSTM, Quaternion,
+    Coquaternion, ``Cl(1,1)``), residual TCN and Quaternion-GRU templates, three
+    lightweight mechanism-inspired presets, and 15 editable TSLib-core presets.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Deep-copied list of normalized preset specifications annotated with
+        ``preset_id`` and ``locked`` flags.
+    """
     common_input = {"representation": "levels", "feature_order": [0, 1, 2, 3]}
     output: list[dict[str, Any]] = []
     for first_type, title, params in (

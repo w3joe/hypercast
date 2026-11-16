@@ -1,11 +1,18 @@
-"""Source-symbolic lowering, never an observed/sample-value execution trace.
+"""Source-symbolic PyTorch FX lowering for v1 pipeline and TSLib models.
 
-Shape/data-dependent routines that FX cannot express are explicit registered
-kernels below. Trainable convolutions/projections remain separate graph calls.
+Rather than recording a brittle data-dependent execution trace, this module
+symbolically traces models with ``torch.fx`` while substituting explicit
+registered helper kernels for shape/FFT/folding routines that standard FX
+proxies cannot step through. Trainable convolutions, projections, and attention
+layers remain distinct ``call_module`` nodes in the lowered graph.
 """
+
+from __future__ import annotations
+
 from contextlib import ExitStack
 import math
 import threading
+from typing import Any
 from unittest.mock import patch
 
 import einops
@@ -19,7 +26,8 @@ from .upstream_models import UpstreamSequence
 LOWERING_LOCK = threading.RLock()
 
 
-def period_select(x, k):
+def period_select(x: torch.Tensor, k: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """Select top-``k`` dominant FFT periods and their batch amplitude weights."""
     amplitudes = torch.fft.rfft(x, dim=1).abs()
     frequency = amplitudes.mean(0).mean(-1)
     frequency[0] = -torch.inf
@@ -27,7 +35,8 @@ def period_select(x, k):
     return x.shape[1] // indices, amplitudes.mean(-1)[:, indices]
 
 
-def period_fold(x, period):
+def period_fold(x: torch.Tensor, period: int | torch.Tensor) -> torch.Tensor:
+    """Fold a ``[B, T, C]`` sequence into a 2D ``[B, C, num_periods, period]`` grid."""
     period = int(period)
     batch, length, width = x.shape
     padded = math.ceil(length / period) * period
@@ -35,58 +44,69 @@ def period_fold(x, period):
     return x.reshape(batch, padded // period, period, width).permute(0, 3, 1, 2).contiguous()
 
 
-def period_unfold(x, original):
+def period_unfold(x: torch.Tensor, original: torch.Tensor) -> torch.Tensor:
+    """Unfold a 2D period grid back to the original ``[B, T, C]`` length."""
     return x.permute(0, 2, 3, 1).reshape(original.shape[0], -1, original.shape[2])[:, :original.shape[1]]
 
 
-def period_attention_fold(x, period):
+def period_attention_fold(x: torch.Tensor, period: int | torch.Tensor) -> torch.Tensor:
+    """Fold ``[B, T, C]`` into period-aligned ``[B * num_periods, period, C]`` windows."""
     folded = period_fold(x, period)
     return folded.permute(0, 2, 3, 1).reshape(-1, int(period), x.shape[2])
 
 
-def period_attention_unfold(x, original):
+def period_attention_unfold(x: torch.Tensor, original: torch.Tensor) -> torch.Tensor:
+    """Restore ``[B * num_periods, period, C]`` attention outputs to ``[B, T, C]``."""
     return x.reshape(original.shape[0], -1, original.shape[2])[:, :original.shape[1]]
 
 
-def period_combine(outputs, weights):
+def period_combine(outputs: list[torch.Tensor], weights: torch.Tensor) -> torch.Tensor:
+    """Aggregate multi-period branch outputs using softmax-normalized FFT weights."""
     stacked = torch.stack(outputs, dim=-1)
     weights = torch.softmax(weights, dim=1)[:, None, None, :]
     return (stacked * weights).sum(-1)
 
 
-def even_pad(x):
+def even_pad(x: torch.Tensor) -> torch.Tensor:
+    """Replicate the final step when sequence length ``T`` is odd (for SCINet splitting)."""
     return torch.cat([x, x[:, -1:, :]], dim=1) if x.shape[1] % 2 else x
 
 
-def segment_merge_layout(x, window):
+def segment_merge_layout(x: torch.Tensor, window: int) -> torch.Tensor:
+    """Concatenate ``window`` strided sub-segments along the channel axis (Crossformer)."""
     remainder = x.shape[2] % window
     if remainder:
         x = torch.cat((x, x[:, :, -(window - remainder):, :]), dim=-2)
     return torch.cat([x[:, :, i::window, :] for i in range(window)], dim=-1)
 
 
-def even_trim(x, original):
+def even_trim(x: torch.Tensor, original: torch.Tensor) -> torch.Tensor:
+    """Trim SCINet odd-branch length when ``original`` had an odd sequence length."""
     return x[:, :original.shape[1] // 2, :] if original.shape[1] % 2 else x
 
 
-def interleave(even, odd):
+def interleave(even: torch.Tensor, odd: torch.Tensor) -> torch.Tensor:
+    """Re-interleave even and odd temporal subsequences in SCINet tree blocks."""
     length = min(even.shape[1], odd.shape[1])
     result = torch.stack([even[:, :length], odd[:, :length]], dim=2).flatten(1, 2)
     return torch.cat([result, even[:, length:]], dim=1)
 
 
-def multi_decompose(x, kernels):
+def multi_decompose(x: torch.Tensor, kernels: list[int]) -> tuple[torch.Tensor, torch.Tensor]:
+    """Apply TSLib multi-kernel moving-average decomposition on ``x``'s device."""
     from ._vendor.tslib.layers.Autoformer_EncDec import series_decomp_multi
     return series_decomp_multi(kernels).to(x.device)(x)
 
 
-def positional_encoding(x, inverse_timescales):
+def positional_encoding(x: torch.Tensor, inverse_timescales: torch.Tensor) -> torch.Tensor:
+    """Compute sinusoidal positional encodings matching SCINet's buffer layout."""
     scaled = torch.arange(x.shape[1], device=x.device, dtype=torch.float32)[:, None] * inverse_timescales[None, :]
     signal = torch.cat([torch.sin(scaled), torch.cos(scaled)], dim=1)
     return signal[None, :, :x.shape[2]]
 
 
-def _has_proxy(value):
+def _has_proxy(value: Any) -> bool:
+    """Return ``True`` if ``value`` or any nested element is a ``torch.fx.Proxy``."""
     if isinstance(value, Proxy):
         return True
     if isinstance(value, (list, tuple)):
@@ -97,26 +117,41 @@ def _has_proxy(value):
 
 
 class SourceTracer(Tracer):
-    def __init__(self):
-        super().__init__(autowrap_functions=(einops.rearrange, einops.repeat))
-        self.norm_stats = {}
-        self.owners = []
+    """Custom ``torch.fx.Tracer`` preserving submodule ownership and TSLib idioms.
 
-    def create_proxy(self, *args, **kwargs):
+    Records the enclosing ``layers.<i>`` submodule path in ``node.meta["owner"]``
+    so the graph converter can group lowered operations into collapsible stages,
+    and rewrites non-FX-traceable TSLib blocks (``TimesBlock``, ``ScaleGraphBlock``,
+    ``SCINet``, ``SegMerging``, ``StandardNorm``) in terms of registered kernels
+    while keeping their trainable leaf layers exposed.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(autowrap_functions=(einops.rearrange, einops.repeat))
+        self.norm_stats: dict[int, tuple[Any, Any]] = {}
+        self.owners: list[str] = []
+
+    def create_proxy(self, *args: Any, **kwargs: Any) -> Proxy:
+        """Create an FX proxy annotated with the active submodule ``owner`` path."""
         result = super().create_proxy(*args, **kwargs)
         if self.owners:
             result.node.meta['owner'] = self.owners[-1]
         return result
 
-    def kernel(self, function, *args, **kwargs):
+    def kernel(self, function: Any, *args: Any, **kwargs: Any) -> Proxy:
+        """Emit a ``call_function`` proxy node for a registered helper kernel."""
         return self.create_proxy('call_function', function, args, kwargs)
 
-    def is_leaf_module(self, module, path):
+    def is_leaf_module(self, module: nn.Module, path: str) -> bool:
+        """Treat ``HyperDense`` and custom spectral/embedding modules as atomic leaves."""
         if type(module).__name__ in {'HyperDense', 'HiPPO_LegT', 'SpectralConv1d', 'PositionalEmbedding', 'FixedEmbedding'}:
             return True
         return super().is_leaf_module(module, path)
 
-    def call_module(self, module, forward, args, kwargs):
+    def call_module(
+        self, module: nn.Module, forward: Any, args: tuple[Any, ...], kwargs: dict[str, Any]
+    ) -> Any:
+        """Track the active submodule path on ``self.owners`` while lowering ``module``."""
         path = self.submodule_paths.get(module, self.owners[-1] if self.owners else '')
         self.owners.append(path)
         try:
@@ -124,7 +159,10 @@ class SourceTracer(Tracer):
         finally:
             self.owners.pop()
 
-    def lower_module(self, module, forward, args, kwargs):
+    def lower_module(
+        self, module: nn.Module, forward: Any, args: tuple[Any, ...], kwargs: dict[str, Any]
+    ) -> Any:
+        """Lower TSLib-specific composite blocks using explicit FX-safe helper kernels."""
         kind = type(module).__name__
         package = type(module).__module__
         if isinstance(module, nn.AvgPool1d) and module not in self.submodule_paths:
@@ -188,8 +226,24 @@ class SourceTracer(Tracer):
         return super().call_module(module, forward, args, kwargs)
 
 
-def lower_source(model):
-    """Lower registered source to a symbolic program; data-dependent bools fail."""
+def lower_source(model: nn.Module) -> GraphModule:
+    """Symbolically lower ``model`` into a functional ``torch.fx.GraphModule``.
+
+    Rewrites in-place tensor methods (``masked_fill_``, ``add_``, ``sub_``,
+    ``mul_``, ``div_``) into out-of-place functional calls so dataflow edges are
+    explicit, and binds functional dropout calls to the live ``training``
+    attribute rather than freezing ``model.training`` at trace time.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Compiled Schema v1 ``ExperimentalForecaster`` to lower.
+
+    Returns
+    -------
+    torch.fx.GraphModule
+        Symbolically traced graph module suitable for Schema v2 graph conversion.
+    """
     with LOWERING_LOCK, ExitStack() as stack:
         tracer = SourceTracer()
         for name in ('zeros', 'ones', 'arange', 'empty', 'full', 'tensor', 'eye', 'reshape'):

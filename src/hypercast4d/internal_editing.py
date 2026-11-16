@@ -1,11 +1,17 @@
 """Shape-preserving edits to actual dense modules inside pinned model cores.
 
 The original module hierarchy and forward connections are retained. This is not
-an unrestricted graph compiler: only Linear and pure dense Sequential subtrees
-can be replaced. No user-supplied Python or arbitrary attribute paths execute.
+an unrestricted graph compiler: only ``nn.Linear`` and pure dense
+``nn.Sequential`` subtrees can be replaced. No user-supplied Python or arbitrary
+attribute paths execute.
 """
+
+from __future__ import annotations
+
+from collections.abc import Iterable
 import math
 import re
+from typing import Any
 
 from torch import nn
 
@@ -15,7 +21,22 @@ ACTIVATIONS = {'relu': nn.ReLU, 'gelu': nn.GELU, 'silu': nn.SiLU,
 POINTWISE = (nn.ReLU, nn.GELU, nn.SiLU, nn.Tanh, nn.Identity, nn.Dropout)
 
 
-def normalize_internal_overrides(raw):
+def normalize_internal_overrides(raw: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Validate Schema v1 ``internal_overrides`` mappings for TSLib model blocks.
+
+    Parameters
+    ----------
+    raw : dict[str, Any]
+        Mapping from dotted submodule paths (for example ``"model.0.temporal"``)
+        to override specifications with optional ``hidden_units`` (up to 4 ints
+        in ``[1, 512]``), ``activation``, ``dropout``, and ``bias``.
+
+    Returns
+    -------
+    dict[str, dict[str, Any]]
+        Canonicalized override dictionary rejected if parent and child paths
+        overlap.
+    """
     if not isinstance(raw, dict) or len(raw) > 64:
         raise ValueError('internal_overrides must be an object with at most 64 edits')
     if any(not isinstance(path, str) for path in raw):
@@ -45,7 +66,26 @@ def normalize_internal_overrides(raw):
     return result
 
 
-def dense_targets(model, excluded=()):
+def dense_targets(
+    model: nn.Module, excluded: Iterable[str] = ()
+) -> list[dict[str, Any]]:
+    """Enumerate editable ``Linear`` and pure-dense ``Sequential`` subtrees in ``model``.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Root upstream TSLib model instance.
+    excluded : Iterable[str], default=()
+        Dotted submodule path prefixes to skip (such as unused calendar
+        embeddings).
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Metadata records with ``path``, ``kind`` (``"dense"`` or
+        ``"dense_stack"``), ``in_features``, ``out_features``, ``hidden_units``,
+        and human-readable ``structure``.
+    """
     targets = []
     for path, module in model.named_modules():
         if not path or any(path == prefix or path.startswith(prefix + '.') for prefix in excluded):
@@ -70,7 +110,28 @@ def dense_targets(model, excluded=()):
     return targets
 
 
-def apply_internal_overrides(model, overrides, excluded=()):
+def apply_internal_overrides(
+    model: nn.Module,
+    overrides: dict[str, Any],
+    excluded: Iterable[str] = (),
+) -> list[dict[str, Any]]:
+    """Replace allowlisted dense subtrees in ``model`` while preserving boundary widths.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Target PyTorch model modified in place.
+    overrides : dict[str, Any]
+        Raw or normalized ``internal_overrides`` mapping.
+    excluded : Iterable[str], default=()
+        Submodule path prefixes excluded from editing.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Updated ``dense_targets`` list annotated with active ``override`` and
+        ``blocked_by`` conflict markers.
+    """
     targets = dense_targets(model, excluded)
     indexed = {target['path']: target for target in targets}
     edits = normalize_internal_overrides(overrides)

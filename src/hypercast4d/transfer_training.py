@@ -10,6 +10,7 @@ from .training import seed_everything
 
 
 def rng_state(generator):
+    """Snapshot PyTorch CPU/CUDA, DataLoader ``generator``, Python, and NumPy RNG states."""
     n=np.random.get_state()
     return dict(torch=torch.get_rng_state(),cuda=torch.cuda.get_rng_state_all() if torch.cuda.is_available() else [],
         sampler=generator.get_state(),python=random.getstate(),
@@ -17,16 +18,19 @@ def rng_state(generator):
 
 
 def restore_rng(state,generator):
+    """Restore RNG states captured by ``rng_state``."""
     torch.set_rng_state(state['torch']);generator.set_state(state['sampler']);random.setstate(state['python'])
     n=state['numpy'];np.random.set_state((n[0],np.array(n[1],dtype=np.uint32),n[2],n[3],n[4]))
     if state['cuda']:torch.cuda.set_rng_state_all(state['cuda'])
 
 
 def atomic_save(payload,path):
+    """Atomically write ``torch.save(payload, ...)`` to ``path``."""
     temporary=path.with_suffix('.tmp');torch.save(payload,temporary);temporary.replace(path)
 
 
 def fit(model,train,inner,output,*,seed,epochs=150,patience=20,device='cpu',metadata=None,resume=False,deadline=None):
+    """Train ``model`` with MAE loss, checkpointing, and exact RNG resumption."""
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
     latest=output/'latest.pt';best_file=output/'best.pt'
     if latest.exists() and not resume:raise ValueError('Existing training state; explicit resume required')

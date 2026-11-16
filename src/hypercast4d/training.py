@@ -18,6 +18,24 @@ from torch.utils.data import DataLoader, TensorDataset
 
 @dataclass(frozen=True)
 class FitResult:
+    """Summary statistics returned upon completing a model training run.
+
+    Parameters
+    ----------
+    epochs_ran : int
+        Number of training epochs completed before stopping or reaching ``epochs``.
+    best_validation_loss : float
+        Lowest mean scaled validation loss observed across completed epochs.
+    train_seconds : float
+        Wall-clock training duration in seconds.
+    process_peak_rss_mb : float
+        OS-reported process peak resident set size in MiB after fitting.
+    peak_gpu_allocated_mb : float or None, default=None
+        Peak PyTorch CUDA allocator usage in MiB when ``device.type == "cuda"``.
+    best_epoch : int, default=0
+        1-based epoch index achieving ``best_validation_loss``.
+    """
+
     epochs_ran: int
     best_validation_loss: float
     train_seconds: float
@@ -27,6 +45,7 @@ class FitResult:
 
 
 def seed_everything(seed: int | None) -> None:
+    """Seed Python ``random``, NumPy, and PyTorch CPU/CUDA RNGs when ``seed`` is given."""
     if seed is None:
         return
     random.seed(seed)
@@ -37,6 +56,7 @@ def seed_everything(seed: int | None) -> None:
 
 
 def _peak_rss_mb() -> float:
+    """Return process peak RSS in MiB (handling macOS byte vs. Linux KiB units)."""
     value = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
     divisor = 1024.0 * 1024.0 if platform.system() == "Darwin" else 1024.0
     return value / divisor
@@ -64,6 +84,54 @@ def fit_model(
     epoch_callback: Callable[[int, float, float], None] | None = None,
     early_stopping_relative_delta: float = 0.0,
 ) -> FitResult:
+    """Train ``model`` with Adam, optional early stopping, and checkpoint tracking.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Forecasting network modified in place.
+    train_data : torch.utils.data.TensorDataset
+        Scaled ``(features, targets)`` training dataset.
+    validation_data : torch.utils.data.TensorDataset
+        Scaled ``(features, targets)`` validation dataset used for loss tracking
+        and optional early stopping.
+    seed : int or None
+        Deterministic RNG and ``DataLoader`` shuffle seed.
+    epochs : int
+        Maximum number of training epochs.
+    batch_size : int
+        Training and validation mini-batch size.
+    learning_rate : float
+        Adam step size.
+    adam_beta1, adam_beta2 : float
+        Adam exponential decay rates (``0.9`` and ``0.999`` in Keras/PyTorch).
+    adam_epsilon : float
+        Adam numerical stability term (``1e-7`` matches Keras 2.12).
+    adam_amsgrad : bool
+        Enable the AMSGrad variant of Adam.
+    loss_name : {"mse", "mae", "huber"}
+        Training and validation loss objective.
+    shuffle : bool
+        Shuffle training windows at each epoch using a seeded generator.
+    early_stopping_patience : int or None
+        Stop after this many consecutive non-improving epochs, or ``None`` to
+        run all ``epochs``.
+    early_stopping_min_delta : float
+        Minimum absolute validation-loss decrease counted as an improvement.
+    restore_best_weights : bool
+        Reload the lowest-validation-loss state dictionary upon completion.
+    device : torch.device
+        Target execution device (``cpu``, ``mps``, or ``cuda``).
+    epoch_callback : callable or None, default=None
+        Optional hook invoked as ``epoch_callback(epoch_1based, train_loss, val_loss)``.
+    early_stopping_relative_delta : float, default=0.0
+        Minimum relative improvement fraction combined with ``early_stopping_min_delta``.
+
+    Returns
+    -------
+    FitResult
+        Timing, memory, best-epoch, and validation-loss summary.
+    """
     seed_everything(seed)
     model.to(device)
     generator = torch.Generator().manual_seed(seed) if seed is not None else None
@@ -165,8 +233,30 @@ def fit_model(
 
 
 def benchmark_inference(model: nn.Module, features: torch.Tensor, device: torch.device,
-                        batch_size: int = 32, warmup: int = 10, repeats: int = 30) -> dict:
-    """Resident-input latency at a fixed batch size; excludes host/device transfer."""
+                        batch_size: int = 32, warmup: int = 10, repeats: int = 30) -> dict[str, Any]:
+    """Measure resident-input forward latency in milliseconds per fixed-size batch.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        Evaluated model placed on ``device``.
+    features : torch.Tensor
+        Feature pool containing at least ``batch_size`` examples.
+    device : torch.device
+        Execution device; CUDA streams are synchronized around timing boundaries.
+    batch_size : int, default=32
+        Fixed batch size sliced from ``features``.
+    warmup : int, default=10
+        Unmeasured warmup forward passes before starting the timer.
+    repeats : int, default=30
+        Measured forward passes averaged into ``inference_ms_per_batch``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Dictionary with ``inference_batch_size``, ``inference_warmup``,
+        ``inference_repeats``, and ``inference_ms_per_batch``.
+    """
     if len(features) < batch_size:
         raise ValueError("Not enough examples for the fixed inference benchmark batch")
     inputs = features[:batch_size].to(device)
@@ -192,6 +282,7 @@ def predict(
     device: torch.device,
     batch_size: int,
 ) -> np.ndarray:
+    """Run batched ``eval()`` inference over ``dataset`` and return a NumPy array."""
     model.eval()
     batches: list[np.ndarray] = []
     with torch.no_grad():
@@ -201,6 +292,15 @@ def predict(
 
 
 def error_metrics(prediction: np.ndarray, target: np.ndarray) -> dict[str, float]:
+    """Compute Mean Absolute Error (``mae``) and Mean Squared Error (``mse``).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from hypercast4d.training import error_metrics
+    >>> error_metrics(np.array([2.0, 4.0]), np.array([1.0, 2.0]))
+    {'mae': 1.5, 'mse': 2.5}
+    """
     residual = prediction - target
     return {
         "mae": float(np.mean(np.abs(residual))),

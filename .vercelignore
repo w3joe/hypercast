@@ -5,6 +5,8 @@
 /.pytest_cache
 /.ruff_cache
 /build
+/site
+/mkdocs.yml
 /configs
 /data
 /deploy

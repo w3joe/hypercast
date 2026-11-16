@@ -21,11 +21,13 @@ RESULT_FILES = ("runs.csv", "per_lead.csv", "summary.json", "summary.csv",
 
 
 def cloud(*args: str, timeout: int = 120, check: bool = True) -> subprocess.CompletedProcess:
+    """Execute ``gcloud <args> --quiet`` in an isolated session."""
     return subprocess.run(["gcloud", *args, "--quiet"], capture_output=True, text=True,
                           timeout=timeout, check=check, start_new_session=True)
 
 
 def package_job(job_dir: Path, destination: Path) -> None:
+    """Bundle ``src/hypercast4d``, dataset, and ``request.json`` into ``destination`` ZIP."""
     request = json.loads((job_dir / "request.json").read_text())
     evaluation = normalize_evaluation(request["evaluation"])
     request["evaluation"] = {**evaluation, "device": "cuda"}
@@ -46,6 +48,7 @@ def package_job(job_dir: Path, destination: Path) -> None:
 
 
 def startup_script(prefix: str, count: int, shard_index: int = 0, shard_count: int = 1) -> str:
+    """Render the bash VM startup script downloading ``payload.zip`` and uploading ``result.zip``."""
     # All configuration is server-owned; quote even validated values.
     prefix = shlex.quote(prefix)
     return f'''#!/bin/bash
@@ -78,6 +81,7 @@ python3 -m hypercast4d.gcp_worker --job-dir /opt/hypercast-job/job --gpu-count {
 
 
 def create_arguments(config: dict, name: str, machine: str, script: Path) -> list[str]:
+    """Construct ``gcloud compute instances create`` flags with bounded runtime auto-delete."""
     return ["compute", "instances", "create", name,
             f"--project={config['project']}", f"--zone={config['zone']}",
             f"--machine-type={machine}", f"--image={config['image']}",
@@ -91,6 +95,7 @@ def create_arguments(config: dict, name: str, machine: str, script: Path) -> lis
 
 
 def collect_result(archive_path: Path, job_dir: Path) -> None:
+    """Extract and validate ``result.zip`` artifacts into ``job_dir``."""
     with zipfile.ZipFile(archive_path) as archive:
         for filename in (*RESULT_FILES, "bootstrap.log"):
             name = f"job/{filename}"
@@ -110,6 +115,7 @@ def collect_result(archive_path: Path, job_dir: Path) -> None:
 
 
 def run_gcp_job(job_dir: Path) -> None:
+    """Launch 1–2 ephemeral Compute Engine GPU VMs, collect artifacts, and clean up."""
     config = gcp_config()
     request = json.loads((job_dir / "request.json").read_text())
     execution = normalize_execution(request.get("execution"))
@@ -204,6 +210,7 @@ def run_gcp_job(job_dir: Path) -> None:
 
 
 def main() -> None:
+    """Worker subprocess entry point for ``python -m hypercast4d.gcp_runner``."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--job-dir", required=True, type=Path)
     run_gcp_job(parser.parse_args().job_dir.resolve())

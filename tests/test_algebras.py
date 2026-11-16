@@ -49,7 +49,6 @@ def test_unknown_algebra_is_rejected() -> None:
     [
         ("complex", 2),
         ("split_complex", 2),
-        ("tricomplex", 3),
         ("quaternion", 4),
         ("coquaternion", 4),
         ("cl11", 4),
@@ -71,15 +70,6 @@ def test_two_dimensional_products() -> None:
     unit = basis(1, 2)
     assert torch.equal(complex_numbers.multiply(unit, unit), -basis(0, 2))
     assert torch.equal(split_complex.multiply(unit, unit), basis(0, 2))
-
-
-def test_cyclic_tricomplex_products() -> None:
-    algebra = get_algebra("tricomplex")
-    h, k = basis(1, 3), basis(2, 3)
-    assert torch.equal(algebra.multiply(h, h), k)
-    assert torch.equal(algebra.multiply(k, k), h)
-    assert torch.equal(algebra.multiply(h, k), basis(0, 3))
-    assert torch.equal(algebra.multiply(k, h), basis(0, 3))
 
 
 def test_octonion_orientation_and_nonassociativity() -> None:
@@ -112,4 +102,4 @@ def test_algebra_rejects_non_cubic_constants() -> None:
 
 
 def test_registry_contains_only_supported_dimensions() -> None:
-    assert {algebra.component_count for algebra in ALGEBRAS.values()} == {2, 3, 4, 8}
+    assert {algebra.component_count for algebra in ALGEBRAS.values()} == {2, 4, 8}

@@ -25,17 +25,17 @@ codes: 0 success, 2 invalid input/declined confirmation, 3 backend unavailable,
 
 ```sh
 hypercast model create tslib-itransformer --out experiment.yaml
-hypercast layer insert experiment.yaml --before core --type dense --id input_lift --set units=12
-hypercast layer insert experiment.yaml --before core --type hyper_dense --id input_hyper --set algebra=quaternion --set units=3
+hypercast layer insert experiment.yaml --before core --type dense --id input_lift --set units=16
+hypercast layer insert experiment.yaml --before core --type hyper_dense --id input_hyper --set algebra=quaternion --set units=4
 hypercast layer list experiment.yaml
 hypercast model validate experiment.yaml --cells 10/1,20/5
 hypercast experiment run experiment.yaml --preset standard --epochs 50 --batch-size 128 --seeds 7,19,31 --cells 10/1,20/5 --target local
 ```
 
-For 2D use `algebra=complex, units=6`; for 3D use `algebra=tricomplex, units=4`;
-for 4D use `algebra=quaternion, units=3`. Use separate `--set` options, not a
-comma-separated assignment. All have 12 real output features. Four raw features
-are not divisible by three, so the explicit 4→12 lift is necessary for 3D.
+For 2D use `algebra=complex, units=8`; for 4D use `algebra=quaternion, units=4`;
+for 8D use `algebra=octonion, units=2`. Use separate `--set` options, not a
+comma-separated assignment. All have 16 real output features. Four raw features
+are not divisible by eight, so the explicit 4→16 lift is necessary for 8D.
 No projection or padding is silently inserted by the CLI.
 
 This reproduces the HyperDense configuration and evaluation settings of the

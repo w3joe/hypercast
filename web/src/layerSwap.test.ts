@@ -23,7 +23,7 @@ describe('Dense type conversion', () => {
     expect(prepareDenseSwap(graph, 'dense', 'hyper_dense', metadata).nodes[1].params.units).toBe(8)
   })
   it.each([
-    ['complex', 2], ['split_complex', 2], ['tricomplex', 3],
+    ['complex', 2], ['split_complex', 2],
     ['quaternion', 4], ['coquaternion', 4], ['cl11', 4], ['octonion', 8],
   ])('preserves width for %s HyperDense with %i components', (algebra, dimension) => {
     const metadata = {
@@ -35,8 +35,9 @@ describe('Dense type conversion', () => {
     expect(next.nodes[1].params).toEqual({ units: 24 / Number(dimension), bias: false, algebra, shape_mode: 'preserve' })
   })
   it('uses the selected algebra dimension when auto-fitting nondivisible widths', () => {
-    const next = prepareDenseSwap(graph, 'dense', 'hyper_dense', info, 'tricomplex')
-    expect(next.nodes[1].params).toEqual({ units: 11, bias: false, algebra: 'tricomplex', shape_mode: 'preserve' })
+    const uneven = { ...info, dense: { ...info.dense, shape: [2, 10, 20] } }
+    const next = prepareDenseSwap(graph, 'dense', 'hyper_dense', uneven, 'octonion')
+    expect(next.nodes[1].params).toEqual({ units: 3, bias: false, algebra: 'octonion', shape_mode: 'preserve' })
   })
   it('changes algebra while retaining the expanded real output width', () => {
     const denseMetadata = {
@@ -49,9 +50,9 @@ describe('Dense type conversion', () => {
       ...denseMetadata,
       dense: { ...denseMetadata.dense, category: 'custom', label: 'HyperDense' },
     }
-    const tricomplex = prepareDenseSwap(quaternion, 'dense', 'hyper_dense', hyperMetadata, 'tricomplex')
+    const octonion = prepareDenseSwap(quaternion, 'dense', 'hyper_dense', hyperMetadata, 'octonion')
     expect(quaternion.nodes[1].params.units).toBe(6)
-    expect(tricomplex.nodes[1].params).toEqual({ units: 8, bias: false, algebra: 'tricomplex', shape_mode: 'preserve' })
+    expect(octonion.nodes[1].params).toEqual({ units: 3, bias: false, algebra: 'octonion', shape_mode: 'preserve' })
   })
   it('pads and crops incompatible widths without mutating the source graph', () => {
     const smallInput = prepareDenseSwap(graph, 'dense', 'hyper_dense', { ...info, input: { ...info.input, shape: [2, 10, 3] } })

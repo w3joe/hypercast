@@ -20,9 +20,10 @@ The evaluation uses chronological splits and training-only normalization to
 avoid future-data leakage.
 
 The architecture playground also supports exploratory HyperDense layers built
-from 2D complex and split-complex numbers, 3D cyclic tricomplex numbers, and 8D
-octonions. These extensions are available for new ablations; the paper presets
-and reproduction path remain the original four-dimensional experiment.
+from 2D complex and split-complex numbers and 8D octonions alongside the 4D
+quaternion, coquaternion, and `Cl(1,1)` algebras. These extensions are available
+for new ablations; the paper presets and reproduction path remain the original
+four-dimensional experiment.
 
 This project is only about the 4D hypercomplex paper. It has no connection to
 Numerion.
@@ -734,7 +735,7 @@ hypercast4d/
 ├── configs/evaluation.yaml          # Default experiment settings
 ├── configs/paper_reproduction.yaml # Released-notebook protocol and full grids
 ├── src/hypercast4d/
-│   ├── algebras.py               # 2D, 3D, 4D, and 8D real algebras
+│   ├── algebras.py               # 2D, 4D, and 8D real algebras
 │   ├── layers.py                 # HyperDense & ShapePreservingHyperDense
 │   ├── architecture.py           # Schema v1 pipeline compiler, catalog & presets
 │   ├── graph_lowering.py         # Symbolic PyTorch FX lowering & TSLib kernels

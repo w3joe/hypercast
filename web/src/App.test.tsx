@@ -37,8 +37,8 @@ beforeEach(() => {
       categories: [{ name: 'Feature mixing', layers: [{ type: 'dense', label: 'Dense', defaults: { units: 32 } }, { type: 'hyper_dense', label: 'HyperDense', defaults: { units: 8, algebra: 'quaternion' } }, { type: 'dropout', label: 'Dropout', defaults: { p: .1 } }] }],
       input_representations: ['levels', 'centered', 'differences'],
       head_types: ['direct', 'persistence_residual', 'cumulative_residual'],
-      algebras: ['complex', 'split_complex', 'tricomplex', 'quaternion', 'coquaternion', 'cl11', 'octonion'],
-      algebra_dimensions: { complex: 2, split_complex: 2, tricomplex: 3, quaternion: 4, coquaternion: 4, cl11: 4, octonion: 8 },
+      algebras: ['complex', 'split_complex', 'quaternion', 'coquaternion', 'cl11', 'octonion'],
+      algebra_dimensions: { complex: 2, split_complex: 2, quaternion: 4, coquaternion: 4, cl11: 4, octonion: 8 },
       activations: ['relu', 'gelu', 'silu', 'tanh', 'linear'],
       presets: [paperPreset],
       method_collection: {

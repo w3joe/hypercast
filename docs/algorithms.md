@@ -20,7 +20,6 @@ $$(u \cdot v)_{\dots, c} = \sum_{a=0}^{d-1} \sum_{b=0}^{d-1} u_{\dots, a}\, v_{\
 |---|---|---:|---|---|---|
 | `complex` | `complexes` | 2 | Yes | Yes | $e_1^2 = -1$ |
 | `split_complex` | `split-complex`, `split complex` | 2 | Yes | Yes | $e_1^2 = +1$ |
-| `tricomplex` | `trinion`, `trinions`, `tricomplexes` | 3 | Yes | Yes | Cyclic $\mathbb{R}[h]/(h^3 - 1)$: $e_1^2 = e_2,\; e_1 e_2 = e_2 e_1 = 1,\; e_2^2 = e_1$ |
 | `quaternion` | `quaternions` | 4 | No | Yes | $e_1^2 = e_2^2 = e_3^2 = -1,\; e_1 e_2 = e_3,\; e_2 e_3 = e_1,\; e_3 e_1 = e_2$ |
 | `coquaternion` | `coquaternions` | 4 | No | Yes | $e_1^2 = -1,\; e_2^2 = e_3^2 = +1,\; e_1 e_2 = e_3,\; e_2 e_3 = -e_1,\; e_3 e_1 = e_2$ |
 | `cl11` | `cl(1,1)`, `clifford11` | 4 | No | Yes | $e_1^2 = +1,\; e_2^2 = -1,\; e_3^2 = +1,\; e_1 e_2 = e_3,\; e_1 e_3 = e_2,\; e_2 e_3 = e_1$ |

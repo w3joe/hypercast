@@ -6,7 +6,7 @@ leakage-safe chronological time-series evaluation workflows.
 
 Public Subsystems
 -----------------
-- ``hypercast4d.algebras`` — Finite-dimensional real algebras (2D, 3D, 4D, 8D)
+- ``hypercast4d.algebras`` — Finite-dimensional real algebras (2D, 4D, 8D)
   and bilinear product kernels.
 - ``hypercast4d.layers`` — [`HyperDense`][hypercast4d.layers.HyperDense] and
   [`ShapePreservingHyperDense`][hypercast4d.layers.ShapePreservingHyperDense]

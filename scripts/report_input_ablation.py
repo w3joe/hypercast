@@ -26,10 +26,10 @@ def main():
         status = json.loads((directory / 'status.json').read_text())
         assert status['state'] == 'complete' and status['completed'] == 6
     assert runs[['mae', 'mse', 'mae_ratio', 'mse_ratio']].notna().all().all()
-    variants = ['original', 'lift_only', 'dense_control', 'hyper_2d', 'hyper_3d', 'hyper_4d']
+    variants = ['original', 'lift_only', 'dense_control', 'hyper_2d', 'hyper_4d', 'hyper_8d']
     models = ['dlinear', 'tsmixer', 'itransformer']
-    names = dict(original='Original', lift_only='Dense 4→12 only', dense_control='Dense 4→12 + Dense 12→12',
-                 hyper_2d='Dense 4→12 + HyperDense 2D', hyper_3d='Dense 4→12 + HyperDense 3D', hyper_4d='Dense 4→12 + HyperDense 4D')
+    names = dict(original='Original', lift_only='Dense 4→16 only', dense_control='Dense 4→16 + Dense 16→16',
+                 hyper_2d='Dense 4→16 + HyperDense 2D', hyper_4d='Dense 4→16 + HyperDense 4D', hyper_8d='Dense 4→16 + HyperDense 8D')
     summary = pd.read_csv(root / 'comparison.csv')
     ratios = summary.pivot(index='variant', columns='model', values='mae_ratio')
     text = [f"# HyperDense input ablation — {manifest['evaluation']['epochs']} epochs", '',
@@ -45,10 +45,10 @@ def main():
              '- Chronological train/validation/test allocation: 70% / 15% / 15%. Normalization fitted to training data only; the last 15% was not evaluated.',
              f"- Epochs: {manifest['evaluation']['epochs']}; batch size 128; seeds 7, 19, 31; window/horizon 10/1 and 20/5; Adam learning rate 0.001. Fixed final epoch, no early stopping or best-weight restoration.",
              '- CPU execution, two Torch threads. All candidates used identical evaluation settings.',
-             '- 2D = complex (6 output units); 3D = cyclic tricomplex (4 units); 4D = quaternion (3 units). Every HyperDense input/output has 12 real-valued features.',
-             '- A common learned 4→12 Dense lift is necessary for a matched-width 3D comparison because four is not divisible by three. No activation was inserted between the lift and HyperDense.',
+             '- 2D = complex (8 output units); 4D = quaternion (4 units); 8D = octonion (2 units). Every HyperDense input/output has 16 real-valued features.',
+             '- A common learned 4→16 Dense lift is necessary for a matched-width 8D comparison because four is not divisible by eight. No activation was inserted between the lift and HyperDense.',
              '- The projection-only and two-Dense controls distinguish input widening and added linear parameterization from the hypercomplex structure.',
-             '- Widths are matched, parameter counts are not: the 12→12 stage has 156 parameters for Dense, 84 for 2D, 60 for 3D, and 48 for 4D.',
+             '- Widths are matched, parameter counts are not: the 16→16 stage has 272 parameters for Dense, 144 for 2D, 80 for 4D, and 48 for 8D.',
              '- Changing dimension also changes the algebra and parameter sharing. These runs do not isolate dimension alone or establish statistical significance (only three seeds and one chronological split).',
              '- These are existing playground TSLib-core adaptations with the playground forecast head, not full published-model benchmark reproductions.',
              '- The unchanged-architecture and hybrid initialization streams differ even with matched seeds; initial weights are not identical.', '',

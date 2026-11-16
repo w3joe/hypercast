@@ -41,7 +41,7 @@ def test_hyper_model_uses_requested_algebra() -> None:
 
 @pytest.mark.parametrize(
     ("name", "features"),
-    [("hyper_complex", 2), ("hyper_tricomplex", 3), ("hyper_octonion", 8)],
+    [("hyper_complex", 2), ("hyper_split_complex", 2), ("hyper_octonion", 8)],
 )
 def test_hyper_model_supports_other_algebra_dimensions(
     name: str, features: int
@@ -53,9 +53,9 @@ def test_hyper_model_supports_other_algebra_dimensions(
 
 
 def test_hyper_model_rejects_feature_width_incompatible_with_algebra() -> None:
-    with pytest.raises(ValueError, match="divisible by 3"):
+    with pytest.raises(ValueError, match="divisible by 8"):
         build_model(
-            "hyper_tricomplex", window=10, horizon=1, **PAPER_MODEL_OPTIONS
+            "hyper_octonion", window=10, horizon=1, **PAPER_MODEL_OPTIONS
         )
 
 

@@ -362,6 +362,7 @@ def load_status(results_directory: Path, row_count: int) -> dict[str, object]:
 def handler_for(
     results_directory: Path, refresh_seconds: float = 1.5
 ) -> type[BaseHTTPRequestHandler]:
+    """Create a ``BaseHTTPRequestHandler`` subclass serving legacy live CSV results."""
     dashboard_html = DASHBOARD_HTML.replace(
         "__REFRESH_MILLISECONDS__", str(round(refresh_seconds * 1000))
     ).replace("__REFRESH_SECONDS__", f"{refresh_seconds:g}")
@@ -405,6 +406,7 @@ def handler_for(
 
 
 def main() -> None:
+    """CLI entry point for ``hypercast4d-dashboard`` (alias to the unified playground)."""
     # Keep the historical helper functions in this module for API compatibility,
     # while the command now opens the unified builder, runs, and comparison app.
     from .playground import main as playground_main

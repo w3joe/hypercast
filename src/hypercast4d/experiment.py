@@ -227,6 +227,23 @@ def _plot(summary: pd.DataFrame, destination: Path) -> None:
 def run(
     config: dict[str, Any], quick: bool = False
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Execute the leakage-safe ``chronological-v1`` evaluation matrix.
+
+    Parameters
+    ----------
+    config : dict[str, Any]
+        Parsed YAML configuration dictionary (following ``configs/evaluation.yaml``).
+    quick : bool, default=False
+        If ``True``, applies ``experiment.quick`` bounds and appends ``_quick``
+        to ``experiment.output_dir`` so full results are not overwritten.
+
+    Returns
+    -------
+    results : pandas.DataFrame
+        Per-run evaluation table saved to ``runs.csv``.
+    summary : pandas.DataFrame
+        Cell-and-model aggregated statistics saved to ``summary.csv``.
+    """
     data_config = config["data"]
     experiment_config = config["experiment"]
     training_config = config["training"]
@@ -545,6 +562,7 @@ def run(
 
 
 def main() -> None:
+    """CLI entry point for ``hypercast4d-run``."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=Path("configs/evaluation.yaml"))
     parser.add_argument(

@@ -22,7 +22,7 @@ export const numeric = (v: unknown): v is number => typeof v === 'number' && Num
 const canonical = (v: unknown): unknown => Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object'
   ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)).map(([k, x]) => [k, canonical(x)])) : v
 
-// Explicit dataset/split metadata defines a cohort. Filenames alone cannot verify provenance.
+/** Canonical provenance key grouping jobs only when dataset, target, split hashes, and phase match. */
 export function comparisonProtocol(job: ComparisonJob) {
   const e = job.request.evaluation as typeof job.request.evaluation & Record<string, unknown>
   if (!e.protocol || !e.data_path || !e.target_column) return `unknown-provenance:${job.id}`
@@ -51,6 +51,7 @@ export const replicateKey = (row: Row) => row.seed == null || row.fold == null ?
 ])
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length
 
+/** Aggregate replicate scores (optionally restricted to `paired` seed/fold intersections) for `(window, horizon)`. */
 export function comparisonData(jobs: ComparisonJob[], window: number, horizon: number, metric: ComparisonMetric, paired: boolean) {
   const sets = jobs.map(job => {
     const rows = job.runs.filter(r => r.window === window && r.horizon === horizon && metricValue(r, metric) !== null)
@@ -76,6 +77,7 @@ export function comparisonData(jobs: ComparisonJob[], window: number, horizon: n
   })
 }
 
+/** Identify non-dominated models on the `(parameters, mean_error)` Pareto frontier. */
 export function paretoIds(data: ReturnType<typeof comparisonData>) {
   const valid = data.filter(r => r.mean !== null && r.parameters !== null)
   return new Set(valid.filter(r => !valid.some(o => o.id !== r.id && o.mean! <= r.mean! && o.parameters! <= r.parameters! && (o.mean! < r.mean! || o.parameters! < r.parameters!))).map(r => r.id))

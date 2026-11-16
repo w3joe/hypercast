@@ -23,6 +23,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
+/** Typed client for the local loopback HyperCAST FastAPI service (`/api/v1/*`). */
 export const api = {
   forecasts: (id: string, window: number, horizon: number, seed: number, fold: number, lead: number, trial = '') =>
     request<import('./ForecastReplay').ForecastResponse>(`/api/v1/jobs/${encodeURIComponent(id)}/forecasts?${new URLSearchParams({ window: String(window), horizon: String(horizon), seed: String(seed), fold: String(fold), lead: String(lead), trial })}`),

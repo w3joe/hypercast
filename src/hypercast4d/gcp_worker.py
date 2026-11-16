@@ -14,6 +14,7 @@ from .diagnostics import initialize_diagnostics
 
 
 def trial_requests(request: dict, shard_index: int = 0, shard_count: int = 1) -> list[dict]:
+    """Partition ``(cell, seed)`` combinations across ``shard_count`` VMs."""
     if not 0 <= shard_index < shard_count:
         raise ValueError("Invalid VM shard")
     evaluation = normalize_evaluation(request["evaluation"])
@@ -22,6 +23,7 @@ def trial_requests(request: dict, shard_index: int = 0, shard_count: int = 1) ->
 
 
 def merge_trials(job_dir: Path, directories: list[Path]) -> None:
+    """Concatenate per-trial CSVs and weight snapshots into ``job_dir``."""
     import pandas as pd
     initialize_diagnostics(job_dir)
     for filename in ("runs.csv", "per_lead.csv", "predictions.csv"):
@@ -42,6 +44,7 @@ def merge_trials(job_dir: Path, directories: list[Path]) -> None:
 
 
 def run_gpu_trials(job_dir: Path, gpu_count: int, shard_index: int = 0, shard_count: int = 1) -> None:
+    """Dispatch single-GPU trial subprocesses across ``CUDA_VISIBLE_DEVICES=0..gpu_count-1``."""
     import torch
     if torch.cuda.device_count() < gpu_count:
         raise RuntimeError(f"Requested {gpu_count} GPUs; CUDA sees {torch.cuda.device_count()}")
@@ -84,6 +87,7 @@ def run_gpu_trials(job_dir: Path, gpu_count: int, shard_index: int = 0, shard_co
 
 
 def main() -> None:
+    """VM-side CLI entry point for ``python -m hypercast4d.gcp_worker``."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--job-dir", type=Path, required=True)
     parser.add_argument("--gpu-count", type=int, required=True)

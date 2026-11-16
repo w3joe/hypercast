@@ -1,7 +1,10 @@
 import type { GraphSpec, GraphNodeSpec, GraphNodeInfo, GraphViewState, GraphEdgeSpec } from './types'
 
+/** Generate a collision-resistant short node/source identifier with `prefix`. */
 export const uid = (prefix = 'node') => `${prefix}-${crypto.randomUUID().slice(0, 8)}`
+/** Default initial left-to-right React Flow view state. */
 export const emptyView = (): GraphViewState => ({ positions: {}, collapsed: [], direction: 'LR', renderer: 'flow', version: 1 })
+/** Sanitize persisted `GraphViewState` against current `graph.groups` and valid zoom bounds. */
 export function safeView(raw: unknown, graph: GraphSpec): GraphViewState {
   const value = raw as Partial<GraphViewState> | undefined
   // Manual placements belong to the previous freeform editor. Arrange those
@@ -14,11 +17,13 @@ export function safeView(raw: unknown, graph: GraphSpec): GraphViewState {
 }
 export const edgeId = (e: GraphEdgeSpec) => JSON.stringify([e.source, e.target, e.port])
 export const groupId = (id: string) => `group:${id}`
+/** Resolve ordered input port names for `node` from validated metadata or static arity rules. */
 export function portsFor(node: GraphNodeSpec, graph: GraphSpec, info: Record<string, GraphNodeInfo>): string[] {
   return info[node.id]?.ports ?? (node.kind === 'source'
     ? [...new Set(graph.edges.filter(e => e.target === node.id).map(e => e.port))]
     : ['add', 'multiply', 'concat'].includes(node.kind) ? ['a', 'b'] : ['x'])
 }
+/** Add `edge` to `graph` (optionally replacing `replacing`) while enforcing DAG acyclicity. */
 export function connectGraph(graph: GraphSpec, edge: GraphEdgeSpec, replacing?: string): GraphSpec {
   const edges = graph.edges.filter(e => edgeId(e) !== replacing)
   if (edges.some(e => e.target === edge.target && e.port === edge.port)) throw new Error('This input already has a connection. Reconnect or delete that edge first.')
@@ -34,8 +39,10 @@ export function connectGraph(graph: GraphSpec, edge: GraphEdgeSpec, replacing?: 
   }
   return { ...graph, edges: [...edges, edge] }
 }
-// One atomic edit: detach a unary layer, heal its old chain, then split the target edge.
-// Ambiguous branches and graph endpoints are deliberately left for explicit wiring.
+/**
+ * Splice a unary `node` onto `targetEdge` in one atomic operation.
+ * If `node` was already wired inline elsewhere, heals its previous connection before splicing.
+ */
 export function insertOnEdge(graph: GraphSpec, node: GraphNodeSpec, targetEdge: string, info: Record<string, GraphNodeInfo> = {}): GraphSpec {
   if (graph.locked) throw new Error('Clone to edit this model.')
   const edge = graph.edges.find(e => edgeId(e) === targetEdge)
@@ -59,6 +66,7 @@ export function insertOnEdge(graph: GraphSpec, node: GraphNodeSpec, targetEdge: 
   return connectGraph(next, { ...edge, source: node.id })
 }
 
+/** Clone selected `ids` with independent `module_ref` weight bindings while preserving internal edges. */
 export function duplicateGraph(graph: GraphSpec, ids: string[]): GraphSpec {
   const mapping = new Map(ids.map(id => [id, uid()]))
   const refs = new Map<string, string>()
@@ -69,6 +77,7 @@ export function duplicateGraph(graph: GraphSpec, ids: string[]): GraphSpec {
   return { ...graph, nodes: [...graph.nodes, ...nodes], edges: [...graph.edges,
     ...graph.edges.filter(e => mapping.has(e.target)).map(e => ({ ...e, source: mapping.get(e.source) ?? e.source, target: mapping.get(e.target)! }))] }
 }
+/** Merge a converted preset `template` into `graph` as an isolated, connectable stage group. */
 export function appendGraph(graph: GraphSpec, template: GraphSpec, info: Record<string, GraphNodeInfo>): GraphSpec {
   const prefix = uid('model'), group = `${prefix}-group`
   const mapping = Object.fromEntries(template.nodes.map(n => [n.id, `${prefix}:${n.id}`]))

@@ -1,8 +1,18 @@
-"""Offline architecture editing shared by CLI and HTTP clients."""
+"""Offline architecture editing shared by the ``hypercast`` CLI and HTTP API.
+
+Provides atomic YAML/JSON file persistence, multi-cell validation checks, cycle-safe
+graph wiring, Dense ↔ HyperDense width-preserving swaps, and node-level
+add/insert/set/replace/remove transformations across both Schema v1 pipelines
+and Schema v2 graphs.
+"""
+
+from __future__ import annotations
+
 import copy
 import json
 from pathlib import Path
 import tempfile
+from typing import Any
 
 import yaml
 
@@ -11,7 +21,19 @@ from .architecture import normalize_architecture_spec, validate_architecture, la
 from .graph_architecture import NEW_OPS, describe_graph, normalize_hyperdense_params
 
 
-def document(raw):
+def document(raw: Any) -> dict[str, Any]:
+    """Unwrap an exported ``ArchitectureRecord`` or raw spec while retaining ``view``.
+
+    Parameters
+    ----------
+    raw : Any
+        Parsed YAML/JSON payload (either a raw spec or ``{"spec": ..., "view": ...}``).
+
+    Returns
+    -------
+    dict[str, Any]
+        Deep-copied architecture specification dictionary.
+    """
     if not isinstance(raw, dict):
         raise ValueError('Architecture must be an object')
     spec = copy.deepcopy(raw.get('spec', raw))
@@ -20,11 +42,36 @@ def document(raw):
     return spec
 
 
-def load_model(path):
+def load_model(path: str | Path) -> dict[str, Any]:
+    """Load a Schema v1 or Schema v2 architecture from a YAML or JSON file.
+
+    Parameters
+    ----------
+    path : str or Path
+        Filesystem path to the ``.yaml``, ``.yml``, or ``.json`` model file.
+
+    Returns
+    -------
+    dict[str, Any]
+        Unwrapped architecture dictionary.
+    """
     return document(yaml.safe_load(Path(path).read_text()))
 
 
-def write_model(path, spec, *, overwrite=False):
+def write_model(
+    path: str | Path, spec: dict[str, Any], *, overwrite: bool = False
+) -> None:
+    """Atomically write ``spec`` to ``path`` as JSON (``.json``) or YAML.
+
+    Parameters
+    ----------
+    path : str or Path
+        Destination file path.
+    spec : dict[str, Any]
+        Serializable architecture specification or record.
+    overwrite : bool, default=False
+        If ``False``, raises ``ValueError`` when ``path`` already exists.
+    """
     path = Path(path)
     if path.exists() and not overwrite:
         raise ValueError(f'{path} exists; choose another --out path')
@@ -40,7 +87,32 @@ def write_model(path, spec, *, overwrite=False):
         temporary.unlink(missing_ok=True)
 
 
-def checked(spec, cells, *, allow_invalid=False):
+def checked(
+    spec: dict[str, Any],
+    cells: list[dict[str, int]],
+    *,
+    allow_invalid: bool = False,
+) -> tuple[dict[str, Any], list[str]]:
+    """Normalize ``spec`` and validate tensor shapes across all ``cells``.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Candidate Schema v1 or Schema v2 specification.
+    cells : list[dict[str, int]]
+        List of ``{"window": W, "horizon": H}`` evaluation cells to verify.
+    allow_invalid : bool, default=False
+        When ``True``, collects shape/connectivity errors in ``notices`` so
+        incomplete drafts can be saved; schema/parameter errors still raise.
+
+    Returns
+    -------
+    normalized : dict[str, Any]
+        Canonicalized specification retaining optional ``view``, ``locked``, and
+        ``preset_id`` fields.
+    notices : list[str]
+        Validation warning strings when ``allow_invalid=True``.
+    """
     normalized = normalize_architecture_spec(spec)
     for key in ('view', 'locked', 'preset_id'):
         if key in spec:
@@ -56,7 +128,40 @@ def checked(spec, cells, *, allow_invalid=False):
     return normalized, notices
 
 
-def connect_graph(spec, source, target, port, *, replace=False):
+def connect_graph(
+    spec: dict[str, Any],
+    source: str,
+    target: str,
+    port: str,
+    *,
+    replace: bool = False,
+) -> dict[str, Any]:
+    """Connect ``source`` to ``target``'s ``port`` while rejecting DAG cycles.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Schema v2 graph specification.
+    source : str
+        Upstream node ID producing the tensor.
+    target : str
+        Downstream node ID consuming the tensor.
+    port : str
+        Input port name on ``target`` (for example ``"x"``, ``"a"``, ``"args/0"``).
+    replace : bool, default=False
+        If ``True``, replaces an existing incoming edge on ``(target, port)``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Updated Schema v2 graph specification with the new edge appended.
+
+    Raises
+    ------
+    ValueError
+        If ``spec`` is not Schema v2, endpoints do not exist, the port is
+        occupied without ``replace=True``, or the edge introduces a cycle.
+    """
     if spec.get('schema_version') != 2:
         raise ValueError('Use model expand before editing graph connections')
     ids = {node['id'] for node in spec['nodes']}
@@ -77,15 +182,18 @@ def connect_graph(spec, source, target, port, *, replace=False):
     return {**spec, 'edges': edges + [{'source': source, 'target': target, 'port': port}]}
 
 
-def layer_types():
+def layer_types() -> dict[str, dict[str, Any]]:
+    """Return a flat lookup dictionary of all supported pipeline and graph operators."""
     return {item['type']: item for group in layer_catalog()['categories'] for item in group['layers']} | {
         name: {'type': name, 'label': name, 'defaults': defaults} for name, defaults in {
             'add': {}, 'multiply': {}, 'concat': {'dim': -1}, 'reshape': {'shape': [0, -1]},
             'permute': {'dims': [0, 2, 1]}, 'softmax': {'dim': -1}}.items()}
 
 
-def validate_params(kind, params, *, graph=False):
-    """Drafts may have shape/connectivity errors, never malformed parameters."""
+def validate_params(
+    kind: str, params: dict[str, Any], *, graph: bool = False
+) -> None:
+    """Validate parameter types and bounds for operator ``kind``."""
     json.dumps(params, allow_nan=False)
     if graph and kind == 'hyper_dense':
         normalize_hyperdense_params(params)
@@ -106,7 +214,27 @@ def validate_params(kind, params, *, graph=False):
             raise ValueError('Permutation must contain each axis exactly once')
 
 
-def describe_layers(spec, cells):
+def describe_layers(
+    spec: dict[str, Any], cells: list[dict[str, int]]
+) -> list[dict[str, Any]]:
+    """Return enriched per-layer or per-node inspection records at ``cells[0]``.
+
+    Annotates hypercomplex nodes with component count, hypercomplex unit count,
+    expanded real output width, and ``shape_mode`` metadata, plus ``shared_calls``
+    when multiple Schema v2 nodes reference the same ``module_ref``.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Schema v1 or Schema v2 architecture specification.
+    cells : list[dict[str, int]]
+        Non-empty list of ``{"window": W, "horizon": H}`` evaluation cells.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Ordered list of layer/node descriptor dictionaries.
+    """
     cell = cells[0]
     if spec.get('schema_version') == 2:
         info = describe_graph(spec, cell['window'], cell['horizon'])['graph_nodes']
@@ -136,8 +264,39 @@ def describe_layers(spec, cells):
     return rows
 
 
-def dense_swap(spec, node_id, target, algebra, cells):
-    """Match canvas semantics: replacing one graph call detaches its shared weights."""
+def dense_swap(
+    spec: dict[str, Any],
+    node_id: str,
+    target: str,
+    algebra: str,
+    cells: list[dict[str, int]],
+) -> dict[str, Any]:
+    """Swap a ``Dense``/``Linear`` and ``HyperDense`` layer while preserving real width.
+
+    Verifies across every cell in ``cells`` that both input and output widths
+    are divisible by the target algebra's component count ``d``, converts the
+    output width to ``width_out // d`` hypercomplex units (or ``width_out`` real
+    units when ``target == "dense"``), preserves bias and stage group, and
+    detaches the node from any shared ``module_ref`` weights.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Schema v1 or Schema v2 architecture specification.
+    node_id : str
+        Identifier of the existing Dense, Linear, or HyperDense layer/node.
+    target : {"dense", "hyper_dense"}
+        Replacement layer kind.
+    algebra : str
+        Algebra name when ``target == "hyper_dense"``.
+    cells : list[dict[str, int]]
+        Evaluation cells over which width divisibility must hold.
+
+    Returns
+    -------
+    dict[str, Any]
+        Updated architecture specification validated across ``cells``.
+    """
     next_spec = copy.deepcopy(spec)
     graph = spec.get('schema_version') == 2
     nodes = next_spec['nodes' if graph else 'layers']
@@ -192,7 +351,48 @@ def dense_swap(spec, node_id, target, algebra, cells):
     return next_spec
 
 
-def edit_layer(spec, action, *, node_id=None, kind=None, params=None, before=None, after=None, port=None, cells=None):
+def edit_layer(
+    spec: dict[str, Any],
+    action: str,
+    *,
+    node_id: str | None = None,
+    kind: str | None = None,
+    params: dict[str, Any] | None = None,
+    before: str | None = None,
+    after: str | None = None,
+    port: str | None = None,
+    cells: list[dict[str, int]] | None = None,
+) -> dict[str, Any]:
+    """Apply an immutable ``add``, ``insert``, ``set``, ``replace``, or ``remove`` edit.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Editable (unlocked) Schema v1 or Schema v2 architecture specification.
+    action : {"add", "insert", "set", "replace", "remove"}
+        Editing operation to apply.
+    node_id : str or None, default=None
+        Target node/layer ID (for ``set``/``replace``/``remove``) or new unique
+        ID (for ``add``/``insert``).
+    kind : str or None, default=None
+        Operator type key for ``add``, ``insert``, or ``replace``.
+    params : dict[str, Any] or None, default=None
+        Parameter overrides or initial settings.
+    before : str or None, default=None
+        Anchor node/layer ID before which ``insert`` splices the new layer.
+    after : str or None, default=None
+        Anchor node/layer ID after which ``insert`` splices the new layer.
+    port : str or None, default=None
+        Specific input port on ``before`` when disambiguating multi-input graph
+        nodes during ``insert``.
+    cells : list[dict[str, int]] or None, default=None
+        Evaluation cells used to inspect source settings or validate Dense swaps.
+
+    Returns
+    -------
+    dict[str, Any]
+        Deep-copied specification reflecting the requested edit.
+    """
     if spec.get('locked'):
         raise ValueError('Locked model: create an editable preset copy first')
     result = copy.deepcopy(spec)

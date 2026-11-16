@@ -26,7 +26,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["httpx2>=2.0", "pytest>=8.0"]
+dev = ["httpx2>=2.0", "pytest>=8.0", "ruff>=0.6"]
+docs = [
+  "mkdocs>=1.6,<2",
+  "mkdocs-material>=9.5,<10",
+  "mkdocstrings[python]>=0.26,<2",
+  "pymdown-extensions>=10.0",
+]
 modal = ["modal>=1.4,<2"]
 
 [project.scripts]
@@ -46,3 +52,15 @@ hypercast4d = ["web_dist/**", "_vendor/**/LICENSE", "_vendor/**/PROVENANCE.json"
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+select = ["D"]
+ignore = ["D105", "D107"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+"scripts/**" = ["D"]
+"src/hypercast4d/_vendor/**" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"

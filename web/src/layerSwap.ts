@@ -1,5 +1,6 @@
 import type { GraphSpec, GraphNodeSpec, GraphNodeInfo } from './types'
 
+/** Component counts for all built-in finite-dimensional real algebras. */
 export const DEFAULT_ALGEBRA_DIMENSIONS: Record<string, number> = {
   complex: 2,
   split_complex: 2,
@@ -10,6 +11,10 @@ export const DEFAULT_ALGEBRA_DIMENSIONS: Record<string, number> = {
   octonion: 8,
 }
 
+/**
+ * Identify whether a graph node represents a swappable real `Dense`/`Linear` or `HyperDense` layer.
+ * Returns `'dense'`, `'hyper_dense'`, or `null` for non-dense operations.
+ */
 export function denseKind(node: GraphNodeSpec, info?: GraphNodeInfo): 'dense' | 'hyper_dense' | null {
   if (node.kind === 'dense' || node.kind === 'hyper_dense') return node.kind
   if (node.kind === 'source' && info?.category === 'call_module') {
@@ -19,6 +24,10 @@ export function denseKind(node: GraphNodeSpec, info?: GraphNodeInfo): 'dense' | 
   return null
 }
 
+/**
+ * Swap a `Dense`/`Linear` and `HyperDense` node while strictly preserving incoming/outgoing real widths.
+ * Detaches shared `module_ref` weights and rejects widths indivisible by the target algebra dimension.
+ */
 export function prepareDenseSwap(
   graph: GraphSpec,
   id: string,

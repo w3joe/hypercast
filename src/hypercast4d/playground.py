@@ -81,7 +81,23 @@ def _csv_rows(path: Path) -> list[dict[str, Any]]:
 
 
 class JobManager:
-    """Persistent, single-worker FIFO queue for local training processes."""
+    """Persistent, single-worker FIFO queue for local, Modal, and GCP training jobs.
+
+    State is persisted atomically under ``root/jobs/<job_id>/`` and
+    ``root/architectures/<uuid>.json``. On startup with ``recover=True``, jobs
+    left in ``starting`` or ``running`` state by a crashed process are marked
+    ``interrupted`` while ``queued`` jobs re-enter the FIFO queue.
+
+    Parameters
+    ----------
+    root : Path
+        Workspace results root directory (default ``results/playground``).
+    project_root : Path
+        Repository root directory resolving relative ``data/`` dataset paths.
+    recover : bool, default=True
+        Scan existing job directories during construction to recover ``queued``
+        jobs and mark stale active jobs ``interrupted``.
+    """
 
     def __init__(self, root: Path, project_root: Path, *, recover: bool = True) -> None:
         self.root = root.resolve()
@@ -112,12 +128,14 @@ class JobManager:
                 self.pending.put(directory.name)
 
     def start(self) -> None:
+        """Start the background daemon worker thread if not already running."""
         if self.thread is not None:
             return
         self.thread = threading.Thread(target=self._worker_loop, daemon=True)
         self.thread.start()
 
     def stop(self) -> None:
+        """Terminate any active worker subprocess and join the queue thread."""
         with self.lock:
             process = self.active_process
             active_id = self.active_id
@@ -189,6 +207,7 @@ class JobManager:
                 )
 
     def save_architecture(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """Validate and persist a Schema v1 or Schema v2 architecture under ``architectures/``."""
         spec = normalize_architecture_spec(raw)
         architecture_id = str(raw.get("id") or uuid.uuid4())
         try:
@@ -213,6 +232,7 @@ class JobManager:
         return record
 
     def list_architectures(self) -> list[dict[str, Any]]:
+        """Return saved architecture records sorted newest-updated first."""
         records = [
             record
             for path in self.architectures_root.glob("*.json")
@@ -221,6 +241,7 @@ class JobManager:
         return sorted(records, key=lambda record: record["updated_at"], reverse=True)
 
     def get_architecture(self, architecture_id: str) -> dict[str, Any]:
+        """Load a saved architecture record by UUID, or raise ``KeyError``."""
         record = _read_json(self.architectures_root / f"{architecture_id}.json")
         if record is None:
             raise KeyError(architecture_id)
@@ -260,6 +281,7 @@ class JobManager:
         evaluation: dict[str, Any] | None,
         execution: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """Validate ``architecture``, ``evaluation``, and ``execution`` and enqueue a job."""
         spec = normalize_architecture_spec(architecture)
         normalized_execution = normalize_execution(execution)
         if normalized_execution["target"] == "modal":
@@ -297,6 +319,7 @@ class JobManager:
         )
 
     def submit_final_test(self, parent_id: str, timeout_seconds: int | None = None) -> dict[str, Any]:
+        """Enqueue a one-time held-out ``final_test`` job for a completed Standard/Robust run."""
         parent = self.get_job(parent_id)
         if parent["status"].get("state") != "complete":
             raise ValueError("validation job must be complete")
@@ -330,6 +353,7 @@ class JobManager:
         )
 
     def cancel(self, job_id: str) -> dict[str, Any]:
+        """Cancel a queued or running job and return its updated record."""
         job = self.get_job(job_id)
         state = job["status"].get("state")
         if state in TERMINAL_STATES:
@@ -341,6 +365,7 @@ class JobManager:
         return self.get_job(job_id)
 
     def get_job(self, job_id: str) -> dict[str, Any]:
+        """Load persisted request, status, summary, runs, and per-lead CSVs for ``job_id``."""
         job_dir = self.jobs_root / job_id
         if not job_dir.is_dir() or job_dir.parent != self.jobs_root:
             raise KeyError(job_id)
@@ -354,6 +379,7 @@ class JobManager:
         }
 
     def list_jobs(self) -> list[dict[str, Any]]:
+        """List all persisted jobs ordered reverse-chronologically by directory name."""
         jobs = []
         for directory in sorted(self.jobs_root.iterdir(), reverse=True):
             if directory.is_dir():
@@ -364,6 +390,7 @@ class JobManager:
         return jobs
 
     def log(self, job_id: str) -> str:
+        """Return up to the trailing 100,000 characters of ``training.log`` for ``job_id``."""
         path = self.jobs_root / job_id / "training.log"
         if not path.exists():
             return ""
@@ -376,6 +403,25 @@ def create_app(
     legacy_results: Path = Path("results/evaluation"),
     *, server_url: str | None = None,
 ) -> FastAPI:
+    """Create the local FastAPI application serving REST APIs and packaged frontend assets.
+
+    Parameters
+    ----------
+    results_root : Path, default=Path("results/playground")
+        Directory storing playground jobs, saved architectures, and lockfiles.
+    project_root : Path or None, default=None
+        Repository root directory (defaults to ``Path.cwd()``).
+    legacy_results : Path, default=Path("results/evaluation")
+        Directory read by ``/api/runs`` and ``/api/status`` for CLI evaluation or
+        reproduction runs.
+    server_url : str or None, default=None
+        Loopback base URL written to ``.runtime/server.json`` for CLI discovery.
+
+    Returns
+    -------
+    fastapi.FastAPI
+        Configured FastAPI application with OpenAPI documentation at ``/docs``.
+    """
     project_root = (project_root or Path.cwd()).resolve()
     manager = JobManager(results_root, project_root, recover=False)
 
@@ -390,11 +436,20 @@ def create_app(
             finally:
                 manager.stop()
 
-    app = FastAPI(title="Hypercast Playground", lifespan=lifespan)
+    app = FastAPI(
+        title="Hypercast Playground API",
+        description=(
+            "Local loopback API for composing hypercomplex neural architectures, "
+            "inspecting weight structures, and managing leakage-safe forecasting jobs."
+        ),
+        version="0.2.0",
+        lifespan=lifespan,
+    )
     app.state.manager = manager
 
-    @app.get('/api/v1/identity')
-    def backend_identity():
+    @app.get('/api/v1/identity', tags=['System'], summary='Get workspace runtime identity')
+    def backend_identity() -> dict[str, Any]:
+        """Return PID, protocol version, graph revision, and workspace paths."""
         from .workspace_runtime import identity
         return identity(project_root, results_root)
 
@@ -402,12 +457,14 @@ def create_app(
     async def architecture_error_handler(_, error: ArchitectureError):
         return JSONResponse(status_code=422, content={"detail": str(error)})
 
-    @app.get("/health")
+    @app.get("/health", tags=["System"], summary="Health check")
     def health() -> dict[str, bool]:
+        """Return ``{"ok": True}`` when the server is reachable."""
         return {"ok": True}
 
-    @app.get("/api/v1/catalog")
+    @app.get("/api/v1/catalog", tags=["Catalog"], summary="List layers, algebras, presets, and methods")
     def catalog() -> dict[str, Any]:
+        """Return the complete layer catalog, 25 presets, 52-method index, and evaluation presets."""
         return {
             **layer_catalog(),
             "presets": presets(),
@@ -416,16 +473,18 @@ def create_app(
             "evaluation_defaults": EVALUATION_DEFAULTS,
         }
 
-    @app.get("/api/v1/compute")
+    @app.get("/api/v1/compute", tags=["Catalog"], summary="Inspect local, Modal, and GCP compute capabilities")
     def compute() -> dict[str, Any]:
+        """Probe available local, Modal GPU, and GCP GPU execution targets."""
         return {
             "local": {"available": True},
             "modal": modal_capability(),
             "gcp": gcp_capability(),
         }
 
-    @app.post("/api/v1/architectures/validate")
+    @app.post("/api/v1/architectures/validate", tags=["Architectures"], summary="Validate architecture shapes and parameters")
     def validate(payload: dict[str, Any]) -> dict[str, Any]:
+        """Validate a Schema v1 or Schema v2 specification at ``(window, horizon)``."""
         try:
             window = int(payload.get("window", 10))
             horizon = int(payload.get("horizon", 1))
@@ -433,8 +492,9 @@ def create_app(
         except (KeyError, TypeError, ValueError, ArchitectureError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
-    @app.post('/api/v1/architectures/edit')
-    def edit_architecture(payload: dict[str, Any]):
+    @app.post('/api/v1/architectures/edit', tags=['Architectures'], summary='Apply an atomic layer/node edit')
+    def edit_architecture(payload: dict[str, Any]) -> dict[str, Any]:
+        """Apply ``add``, ``insert``, ``set``, ``replace``, or ``remove`` and validate across ``cells``."""
         from .model_editing import checked, edit_layer
         try:
             cells = normalize_evaluation({'cells': payload.get('cells', [{'window': 10, 'horizon': 1}])})['cells']
@@ -447,58 +507,66 @@ def create_app(
         except (KeyError, TypeError, ValueError, RuntimeError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
-    @app.post("/api/v1/architectures/internal-graph")
+    @app.post("/api/v1/architectures/internal-graph", tags=["Architectures"], summary="Trace legacy v1 TSLib internal graph")
     def internal_graph(payload: dict[str, Any]) -> dict[str, Any]:
+        """Return an observed single-pass tensor dependency graph for a v1 TSLib block."""
         try:
             return architecture_internal_graph(payload['architecture'], payload['layer_id'],
                                                int(payload.get('window', 10)), int(payload.get('horizon', 1)))
         except (KeyError, TypeError, ValueError, RuntimeError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
-    @app.post('/api/v1/architectures/convert')
+    @app.post('/api/v1/architectures/convert', tags=['Architectures'], summary='Convert Schema v1 pipeline to Schema v2 graph')
     def convert(payload: dict[str, Any]) -> dict[str, Any]:
+        """Lower a Schema v1 pipeline into an editable Schema v2 executable graph."""
         from .graph_architecture import convert_to_graph
         try:
             return convert_to_graph(payload['architecture'], int(payload.get('window', 10)), int(payload.get('horizon', 1)))
         except (KeyError, TypeError, ValueError, RuntimeError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
-    @app.post('/api/v1/architectures/describe')
+    @app.post('/api/v1/architectures/describe', tags=['Architectures'], summary='Describe Schema v2 node ports and settings')
     def describe_architecture(payload: dict[str, Any]) -> dict[str, Any]:
+        """Return static port contracts and settings for draft repair without shape validation."""
         from .graph_architecture import describe_graph
         try:
             return describe_graph(payload['architecture'], int(payload.get('window', 10)), int(payload.get('horizon', 1)))
         except (KeyError, TypeError, ValueError, RuntimeError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
-    @app.get("/api/v1/architectures")
+    @app.get("/api/v1/architectures", tags=["Architectures"], summary="List saved architectures")
     def list_architectures() -> list[dict[str, Any]]:
+        """List saved local architecture records ordered by ``updated_at`` descending."""
         return manager.list_architectures()
 
-    @app.post("/api/v1/architectures")
+    @app.post("/api/v1/architectures", tags=["Architectures"], summary="Save an architecture")
     def save_architecture(payload: dict[str, Any]) -> dict[str, Any]:
+        """Persist a Schema v1 or Schema v2 architecture and optional canvas ``view``."""
         try:
             return manager.save_architecture(payload)
         except (ValueError, ArchitectureError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
-    @app.get("/api/v1/architectures/{architecture_id}")
+    @app.get("/api/v1/architectures/{architecture_id}", tags=["Architectures"], summary="Get saved architecture by UUID")
     def get_architecture(architecture_id: str) -> dict[str, Any]:
+        """Retrieve one saved architecture record by UUID."""
         try:
             return manager.get_architecture(architecture_id)
         except KeyError as error:
             raise HTTPException(status_code=404, detail="architecture not found") from error
 
-    @app.get('/api/v1/comparison-archives')
-    def comparison_archives():
+    @app.get('/api/v1/comparison-archives', tags=['Archives'], summary='List registered comparison archives')
+    def comparison_archives() -> list[dict[str, Any]]:
+        """Return audited read-only benchmark study records for the Compare view."""
         from .comparison_archives import list_archives
         try:
             return list_archives(manager.root, project_root)
         except (ValueError, KeyError, OSError) as error:
             raise HTTPException(status_code=422, detail=f'Cannot load comparison archive: {error}') from error
 
-    @app.get('/api/v1/comparison-archives/{record_id}/forecasts')
-    def archived_forecasts(record_id: str, window: int, horizon: int, seed: int, fold: int, lead: int = 1):
+    @app.get('/api/v1/comparison-archives/{record_id}/forecasts', tags=['Archives'], summary='Read archived point forecasts')
+    def archived_forecasts(record_id: str, window: int, horizon: int, seed: int, fold: int, lead: int = 1) -> dict[str, Any]:
+        """Return up to 2,000 point forecasts for an archived study replicate and lead."""
         from .comparison_archives import read_archive_forecasts
         try:
             return read_archive_forecasts(manager.root, project_root, record_id, window=window, horizon=horizon, seed=seed, fold=fold, lead=lead)
@@ -507,12 +575,14 @@ def create_app(
         except (ValueError, OSError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
-    @app.get("/api/v1/jobs")
+    @app.get("/api/v1/jobs", tags=["Jobs"], summary="List experiment jobs")
     def list_jobs() -> list[dict[str, Any]]:
+        """List all persisted validation and final-test jobs."""
         return manager.list_jobs()
 
-    @app.post("/api/v1/jobs")
+    @app.post("/api/v1/jobs", tags=["Jobs"], summary="Submit a validation job")
     def submit_job(payload: dict[str, Any]) -> dict[str, Any]:
+        """Validate and enqueue a local, Modal, or GCP validation experiment."""
         try:
             return manager.submit_validation(
                 payload["architecture"],
@@ -522,30 +592,34 @@ def create_app(
         except (KeyError, ValueError, ArchitectureError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
-    @app.get("/api/v1/jobs/{job_id}")
+    @app.get("/api/v1/jobs/{job_id}", tags=["Jobs"], summary="Get job details and metrics")
     def get_job(job_id: str) -> dict[str, Any]:
+        """Return job status, request, summary, runs, and per-lead metrics."""
         try:
             return manager.get_job(job_id)
         except KeyError as error:
             raise HTTPException(status_code=404, detail="job not found") from error
 
-    @app.get("/api/v1/jobs/{job_id}/log", response_class=PlainTextResponse)
+    @app.get("/api/v1/jobs/{job_id}/log", response_class=PlainTextResponse, tags=["Jobs"], summary="Read job training log")
     def get_log(job_id: str) -> str:
+        """Return the trailing worker training log text for ``job_id``."""
         try:
             manager.get_job(job_id)
             return manager.log(job_id)
         except KeyError as error:
             raise HTTPException(status_code=404, detail="job not found") from error
 
-    @app.post("/api/v1/jobs/{job_id}/cancel")
+    @app.post("/api/v1/jobs/{job_id}/cancel", tags=["Jobs"], summary="Cancel a queued or running job")
     def cancel_job(job_id: str) -> dict[str, Any]:
+        """Cancel ``job_id`` and terminate its active worker process if running."""
         try:
             return manager.cancel(job_id)
         except KeyError as error:
             raise HTTPException(status_code=404, detail="job not found") from error
 
-    @app.post("/api/v1/jobs/{job_id}/final-test")
+    @app.post("/api/v1/jobs/{job_id}/final-test", tags=["Jobs"], summary="Submit one-time held-out final test")
     def final_test(job_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Unlock and enqueue the single held-out final-test evaluation for ``job_id``."""
         try:
             if set(payload or {}) - {"timeout_seconds"}:
                 raise ValueError("final-test accepts only a timeout override; training settings are inherited")
@@ -555,8 +629,9 @@ def create_app(
         except ValueError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
 
-    @app.get("/api/v1/jobs/{job_id}/predictions.csv")
+    @app.get("/api/v1/jobs/{job_id}/predictions.csv", tags=["Jobs"], summary="Download individual point forecasts CSV")
     def download_predictions(job_id: str):
+        """Stream the full ``predictions.csv`` artifact for ``job_id``."""
         try:
             manager.get_job(job_id)
         except KeyError as error:
@@ -566,8 +641,9 @@ def create_app(
             raise HTTPException(status_code=404, detail="This run has no saved individual forecasts")
         return FileResponse(path, media_type="text/csv", filename=f"{job_id}-predictions.csv")
 
-    @app.get('/api/v1/jobs/{job_id}/forecasts')
-    def forecasts(job_id: str, window: int, horizon: int, seed: int, fold: int, lead: int = 1, trial: str = ''):
+    @app.get('/api/v1/jobs/{job_id}/forecasts', tags=['Jobs'], summary='Query bounded point forecasts for replay')
+    def forecasts(job_id: str, window: int, horizon: int, seed: int, fold: int, lead: int = 1, trial: str = '') -> dict[str, Any]:
+        """Return up to 2,000 chronologically ordered forecasts for one run and lead."""
         from .visualizations import read_forecasts
         try:
             manager.get_job(job_id)
@@ -580,8 +656,9 @@ def create_app(
             raise HTTPException(status_code=404, detail='This run has no saved individual forecasts')
         return read_forecasts(path, window=window, horizon=horizon, seed=seed, fold=fold, lead=lead, trial=trial)
 
-    @app.get('/api/v1/jobs/{job_id}/weights')
-    def trained_weights(job_id: str):
+    @app.get('/api/v1/jobs/{job_id}/weights', tags=['Jobs'], summary='Get trained HyperDense weight snapshots')
+    def trained_weights(job_id: str) -> dict[str, Any]:
+        """Return saved trained ``HyperDense`` component and block-matrix snapshots."""
         try:
             manager.get_job(job_id)
         except KeyError as error:
@@ -591,8 +668,9 @@ def create_app(
             raise HTTPException(status_code=404, detail='This run predates saved weight snapshots. New runs save trained HyperDense weights.')
         return records
 
-    @app.post('/api/v1/architectures/weights')
-    def initialized_weights(payload: dict[str, Any]):
+    @app.post('/api/v1/architectures/weights', tags=['Architectures'], summary='Preview initialized HyperDense weight structure')
+    def initialized_weights(payload: dict[str, Any]) -> dict[str, Any]:
+        """Sample initialized ``HyperDense`` component and effective real matrices at seed 0."""
         import torch
         from .architecture import build_architecture
         from .visualizations import model_weights
@@ -643,6 +721,7 @@ def create_app(
 
 
 def main() -> None:
+    """CLI entry point for ``hypercast4d-playground``."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-root", type=Path, default=Path("results/playground"))
     parser.add_argument("--results", type=Path, default=Path("results/evaluation"))

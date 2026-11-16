@@ -17,10 +17,12 @@ SEEDS = (1101, 1102, 1103)
 
 
 def sha(path):
+    """Return hexadecimal SHA-256 checksum of ``path``."""
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def build_model(backbone, mode, seed):
+    """Build a paired ``levels_direct`` or ``relative_residual`` MICN/FiLM model."""
     if backbone not in ('micn', 'film') or mode not in MODES:
         raise ValueError('Pilot is restricted to native MICN/FiLM and two formulations')
     model, report = build_case(backbone, 'native', seed=seed)
@@ -41,6 +43,7 @@ def build_model(backbone, mode, seed):
 
 
 def score(pred, actual, persistence):
+    """Compute overall and per-lead MAE, MSE, bias, and persistence MAE."""
     error = pred - actual
     return dict(mae=float(np.abs(error).mean()), mse=float(np.square(error).mean()),
                 bias=float(error.mean()), per_lead_mae=np.abs(error).mean(0).tolist(),

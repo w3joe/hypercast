@@ -1,8 +1,24 @@
-"""Structure constants for supported finite-dimensional real algebras.
+r"""Structure constants for supported finite-dimensional real algebras.
 
-``constants[a, b, c]`` is the coefficient of basis element ``c`` in
-``e_a * e_b``.  The paper-facing data path remains four-dimensional; the
-algebras in this module may have two, three, four, or eight components.
+Every algebra of dimension $d$ is represented over the real basis
+$\{e_0, e_1, \dots, e_{d-1}\}$ with real unit $e_0 = 1$ by a cubic
+structure-constant tensor ``constants`` of shape ``(d, d, d)`` where
+
+$$e_a e_b = \sum_{c=0}^{d-1} \text{constants}[a, b, c]\, e_c.$$
+
+Supported Algebras
+------------------
+- ``"complex"`` ($d = 2$): $\mathbb{C} = \mathbb{R}[i]/(i^2 + 1)$
+- ``"split_complex"`` ($d = 2$): $\mathbb{R}[j]/(j^2 - 1)$
+- ``"tricomplex"`` ($d = 3$): cyclic 3-complex $\mathbb{R}[h]/(h^3 - 1)$
+- ``"quaternion"`` ($d = 4$): Hamilton quaternions $\mathbb{H}$
+- ``"coquaternion"`` ($d = 4$): split-quaternions
+- ``"cl11"`` ($d = 4$): Clifford algebra $\mathrm{Cl}(1, 1)$
+- ``"octonion"`` ($d = 8$): Cayley octonions $\mathbb{O}$ (Baez/Fano orientation)
+
+The canonical paper data pipeline remains four-dimensional
+(``PAPER_COMPONENT_COUNT = 4``), while ``HyperDense`` queries
+``algebra.component_count`` directly.
 """
 
 from __future__ import annotations
@@ -20,7 +36,35 @@ PAPER_COMPONENT_COUNT = COMPONENT_COUNT
 
 @dataclass(frozen=True)
 class Algebra:
-    """A named finite-dimensional real algebra with a bilinear product."""
+    r"""A named finite-dimensional real algebra equipped with a bilinear product.
+
+    Parameters
+    ----------
+    name : str
+        Canonical lowercase identifier of the algebra (for example,
+        ``"quaternion"`` or ``"octonion"``).
+    constants : torch.Tensor
+        Cubic tensor of shape ``(d, d, d)`` storing structure constants
+        ``constants[a, b, c]`` for $e_a e_b = \sum_c C_{abc} e_c$.
+
+    Raises
+    ------
+    ValueError
+        If ``constants`` is not a non-empty 3D cubic tensor ``(d, d, d)`` with
+        ``d >= 1``.
+
+    Examples
+    --------
+    >>> import torch
+    >>> from hypercast4d.algebras import get_algebra
+    >>> q = get_algebra("quaternion")
+    >>> q.component_count
+    4
+    >>> e1 = torch.tensor([0.0, 1.0, 0.0, 0.0])
+    >>> e2 = torch.tensor([0.0, 0.0, 1.0, 0.0])
+    >>> q.multiply(e1, e2).tolist()  # i * j = k
+    [0.0, 0.0, 0.0, 1.0]
+    """
 
     name: str
     constants: torch.Tensor
@@ -33,10 +77,33 @@ class Algebra:
 
     @property
     def component_count(self) -> int:
+        """Number of real basis components $d$ in the algebra."""
         return self.constants.shape[0]
 
     def multiply(self, left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
-        """Multiply tensors whose final axis stores basis coefficients."""
+        """Compute the algebra product along the final tensor axis.
+
+        Parameters
+        ----------
+        left : torch.Tensor
+            Left operand of shape ``(..., d)`` storing basis coefficients
+            ``(x_0, x_1, ..., x_{d-1})``.
+        right : torch.Tensor
+            Right operand of shape ``(..., d)`` broadcast-compatible with
+            ``left`` along leading axes.
+
+        Returns
+        -------
+        torch.Tensor
+            Product tensor ``left * right`` of broadcasted shape ``(..., d)``
+            with the device and dtype of ``left``.
+
+        Raises
+        ------
+        ValueError
+        If ``left`` or ``right`` final dimension does not equal
+        ``self.component_count``.
+        """
         if (
             left.shape[-1] != self.component_count
             or right.shape[-1] != self.component_count
@@ -53,7 +120,9 @@ def _constants(
     dimension: int,
     products: dict[tuple[int, int], tuple[float, int]],
 ) -> torch.Tensor:
+    """Populate a ``(d, d, d)`` structure-constant table with identity ``e_0``."""
     result = torch.zeros(dimension, dimension, dimension, dtype=torch.float64)
+    # Basis index 0 is always the multiplicative identity: e_0 * e_b = e_b * e_0 = e_b.
     for basis in range(dimension):
         result[0, basis, basis] = 1.0
         result[basis, 0, basis] = 1.0
@@ -65,10 +134,10 @@ def _constants(
 def _imaginary_units(
     dimension: int, oriented_triples: tuple[tuple[int, int, int], ...]
 ) -> torch.Tensor:
-    """Build constants for anticommuting units with square ``-1``.
+    """Build constants for anticommuting imaginary units with square ``-1``.
 
-    Each oriented triple ``(a, b, c)`` defines ``e_a e_b = e_c`` and its
-    cyclic permutations. Reversing either factor changes the sign.
+    Each oriented triple ``(a, b, c)`` defines ``e_a * e_b = +e_c`` and its
+    cyclic permutations, while reversing either factor negates the sign.
     """
     products: dict[tuple[int, int], tuple[float, int]] = {
         (basis, basis): (-1, 0) for basis in range(1, dimension)
@@ -80,11 +149,13 @@ def _imaginary_units(
     return _constants(dimension, products)
 
 
+# Complex numbers R[i] / (i^2 + 1): e_1^2 = -e_0.
 _COMPLEX = _constants(2, {(1, 1): (-1, 0)})
 
+# Split-complex (hyperbolic) numbers R[j] / (j^2 - 1): e_1^2 = +e_0.
 _SPLIT_COMPLEX = _constants(2, {(1, 1): (1, 0)})
 
-# Cyclic tricomplex numbers R[h] / (h^3 - 1), with k = h^2.
+# Cyclic tricomplex numbers R[h] / (h^3 - 1), with e_1 = h and e_2 = h^2.
 _TRICOMPLEX = _constants(
     3,
     {
@@ -95,7 +166,7 @@ _TRICOMPLEX = _constants(
     },
 )
 
-
+# Hamilton quaternions H: i^2 = j^2 = k^2 = ijk = -1.
 _QUATERNION = _constants(
     4,
     {
@@ -108,9 +179,10 @@ _QUATERNION = _constants(
         (3, 1): (1, 2),
         (3, 2): (-1, 1),
         (3, 3): (-1, 0),
-    }
+    },
 )
 
+# Coquaternions (split-quaternions): e_1^2 = -1, e_2^2 = +1, e_3^2 = +1.
 _COQUATERNION = _constants(
     4,
     {
@@ -123,9 +195,10 @@ _COQUATERNION = _constants(
         (3, 1): (1, 2),
         (3, 2): (1, 1),
         (3, 3): (1, 0),
-    }
+    },
 )
 
+# Real Clifford algebra Cl(1,1) matching Kycia & Niemczynowicz (2025) Table 1.
 _CLIFFORD_11 = _constants(
     4,
     {
@@ -138,11 +211,11 @@ _CLIFFORD_11 = _constants(
         (3, 1): (-1, 2),
         (3, 2): (-1, 1),
         (3, 3): (1, 0),
-    }
+    },
 )
 
 # Baez/Fano-plane orientation. Octonion multiplication conventions differ by
-# basis signs; this explicit orientation makes saved models reproducible.
+# basis signs; pinning these 7 oriented Fano lines makes saved models reproducible.
 _OCTONION = _imaginary_units(
     8,
     (
@@ -182,7 +255,33 @@ _ALIASES = {
 
 
 def get_algebra(name: str) -> Algebra:
-    """Return an algebra by its canonical name or a documented alias."""
+    """Resolve an [`Algebra`][hypercast4d.algebras.Algebra] by canonical identifier or alias.
+
+    Parameters
+    ----------
+    name : str
+        Case-insensitive algebra name (for example ``"quaternion"``,
+        ``"cl11"``, ``"Cl(1,1)"``, ``"split-complex"``, or ``"trinion"``).
+
+    Returns
+    -------
+    Algebra
+        Immutable algebra specification containing its structure-constant
+        tensor.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` does not match a registered algebra or alias.
+
+    Examples
+    --------
+    >>> from hypercast4d.algebras import get_algebra
+    >>> get_algebra("Cl(1,1)").name
+    'cl11'
+    >>> get_algebra("octonions").component_count
+    8
+    """
     key = _ALIASES.get(name.lower(), name.lower())
     try:
         return ALGEBRAS[key]

@@ -1,0 +1,112 @@
+site_name: HyperCAST Documentation
+site_description: Hypercomplex neural layers, executable model graphs, and leakage-safe time-series forecasting in PyTorch.
+repo_url: https://github.com/w3joe/hypercast
+repo_name: w3joe/hypercast
+docs_dir: docs
+site_dir: site
+
+exclude_docs: |
+  etth1_*.md
+  hyperdense_*.md
+  modal_l4_*.md
+  tslib_15_*.md
+  figures/**
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_javascript:
+  - javascripts/katex.js
+  - https://unpkg.com/katex@0.16.11/dist/katex.min.js
+  - https://unpkg.com/katex@0.16.11/dist/contrib/auto-render.min.js
+
+extra_css:
+  - https://unpkg.com/katex@0.16.11/dist/katex.min.css
+
+plugins:
+  - search
+  - autorefs
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: numpy
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            separate_signature: true
+            merge_init_into_class: true
+            members_order: source
+            filters:
+              - "!^_"
+
+nav:
+  - Getting Started:
+      - Overview: index.md
+      - Quickstart & Tutorials: quickstart.md
+  - User Guide:
+      - Algorithms & Mathematics: algorithms.md
+      - Supported Components & Models: components.md
+      - Graph Playground & Workflows: graph_architecture.md
+      - Method Collection: method_collection.md
+      - Method Implementation Audit: method_implementation_audit.md
+  - Configuration & Interfaces:
+      - Schemas, YAML & REST API: configuration.md
+      - Command-Line Interface (CLI): cli.md
+      - GCP GPU Execution: gcp_gpu.md
+  - Developer Guide:
+      - Extending HyperCAST: extending.md
+  - API Reference:
+      - Package Overview: api/index.md
+      - Algebras, Layers & Weights: api/algebras_and_layers.md
+      - Architectures, Lowering & Editing: api/architectures_and_graphs.md
+      - Forecasting Models & Catalog: api/models.md
+      - Data, Training & Diagnostics: api/data_and_training.md
+      - Playground, CLI & Cloud Compute: api/interfaces_and_compute.md

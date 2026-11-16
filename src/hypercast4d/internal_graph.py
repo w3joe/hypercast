@@ -2,9 +2,14 @@
 
 Leaf modules are atomic nodes. Tensor operations between modules propagate
 dependencies; multi-source operations become explicit junctions. This is a
-sample execution view, not a static proof of every possible control-flow path.
+sample execution view for the legacy v1 internal inspector, not a static proof
+of every possible control-flow path.
 """
+
+from __future__ import annotations
+
 import threading
+from typing import Any
 
 import torch
 from torch import nn
@@ -17,7 +22,8 @@ from .upstream_models import UpstreamSequence
 _GRAPH_LOCK = threading.Lock()
 
 
-def _tensors(value):
+def _tensors(value: Any):
+    """Yield every ``torch.Tensor`` nested within ``value``."""
     if isinstance(value, torch.Tensor):
         yield value
     elif isinstance(value, (list, tuple)):
@@ -29,24 +35,37 @@ def _tensors(value):
 
 
 class DependencyRecorder(TorchDispatchMode):
-    def __init__(self):
-        super().__init__()
-        self.nodes = []
-        self.edges = []
-        self.origins = {}
-        self.retained = []  # Prevent Python object-id reuse during this short trace.
-        self.active = []
+    """``TorchDispatchMode`` tracing tensor provenance between leaf ``nn.Module`` calls."""
 
-    def sources(self, value):
+    def __init__(self) -> None:
+        super().__init__()
+        self.nodes: list[dict[str, Any]] = []
+        self.edges: list[dict[str, str]] = []
+        self.origins: dict[int, list[str]] = {}
+        self.retained: list[torch.Tensor] = []  # Prevent Python object-id reuse during this short trace.
+        self.active: list[tuple[str, str | None, list[str]]] = []
+
+    def sources(self, value: Any) -> list[str]:
+        """Return sorted upstream node IDs contributing to tensors in ``value``."""
         return sorted({source for tensor in _tensors(value)
                        for source in self.origins.get(id(tensor), ())})
 
-    def remember(self, value, sources):
+    def remember(self, value: Any, sources: list[str]) -> None:
+        """Associate every tensor in ``value`` with upstream ``sources``."""
         for tensor in _tensors(value):
             self.origins[id(tensor)] = sources
             self.retained.append(tensor)
 
-    def node(self, label, kind, sources, output=None, path=None, target=None):
+    def node(
+        self,
+        label: str,
+        kind: str,
+        sources: list[str],
+        output: Any = None,
+        path: str | None = None,
+        target: str | None = None,
+    ) -> str:
+        """Append a recorded graph node (capped at 1,500 preview nodes) and return its ID."""
         if len(self.nodes) >= 1500:
             raise ValueError('Internal graph exceeds the 1500-node preview limit')
         key = f'n{len(self.nodes)}'
@@ -72,7 +91,20 @@ class DependencyRecorder(TorchDispatchMode):
         return output
 
 
-def trace_core(core):
+def trace_core(core: UpstreamSequence) -> dict[str, Any]:
+    """Record a single synthetic CPU evaluation pass through ``core``.
+
+    Parameters
+    ----------
+    core : UpstreamSequence
+        Wrapped TSLib sequence block to trace.
+
+    Returns
+    -------
+    dict[str, Any]
+        Observed dependency graph with ``nodes``, ``edges``, editable
+        ``targets``, ``mode="observed"``, and explanatory ``notice``.
+    """
     recorder = DependencyRecorder()
     handles = []
     editable = {t['path']: t for t in core.internal_targets if not t['blocked_by']}
@@ -119,7 +151,27 @@ def trace_core(core):
             handle.remove()
 
 
-def architecture_internal_graph(spec, layer_id, window=10, horizon=1):
+def architecture_internal_graph(
+    spec: dict[str, Any], layer_id: str, window: int = 10, horizon: int = 1
+) -> dict[str, Any]:
+    """Build ``spec`` under an isolated RNG seed and trace TSLib block ``layer_id``.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Schema v1 architecture specification containing ``layer_id``.
+    layer_id : str
+        Identifier of the ``tslib_*`` layer to inspect.
+    window : int, default=10
+        Preview lookback window length.
+    horizon : int, default=1
+        Preview forecast horizon.
+
+    Returns
+    -------
+    dict[str, Any]
+        Observed dependency graph returned by ``trace_core``.
+    """
     # Construction and tracing must not advance the application's CPU RNG.
     with _GRAPH_LOCK, torch.random.fork_rng(devices=[]):
         torch.manual_seed(37)

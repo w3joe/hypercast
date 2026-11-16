@@ -1,13 +1,28 @@
-"""Version-two executable graph specifications and their PyTorch executor.
+"""Version-two executable graph specifications and their PyTorch DAG executor.
 
-Source bindings identify operators in a trusted, symbolically lowered template.
-Only the persisted nodes and edges execute. The v1 source is an initialization /
-window-dependent constant recipe, never a fallback forward implementation.
+Schema v2 represents any lowered HyperCAST or TSLib forecasting model as an
+explicit directed acyclic graph (DAG) of ``source`` operators (bound to a
+symbolically lowered v1 recipe) and custom palette operators (``NEW_OPS``).
+
+Execution Invariants
+--------------------
+- Source bindings identify operators in a trusted, symbolically lowered template
+  produced by [`lower_source`][hypercast4d.graph_lowering.lower_source].
+- Only the persisted ``nodes`` and ``edges`` execute during ``forward``; the v1
+  ``sources`` dictionary acts solely as a construction/constant recipe and is
+  never invoked as a fallback whole-model forward pass.
+- Disconnected subgraphs not reachable backward from ``spec["output"]`` are
+  pruned from the topological execution order and surfaced as validation
+  warnings rather than silently executed.
 """
+
+from __future__ import annotations
+
 import copy
 import hashlib
-import json
 import heapq
+import json
+from typing import Any
 
 import torch
 from torch import nn
@@ -24,8 +39,26 @@ NEW_OPS = {'dense', 'activation', 'dropout', 'add', 'multiply', 'concat', 'flatt
            'reshape', 'permute', 'softmax'}
 
 
-def normalize_hyperdense_params(params):
-    """Graph-only auto-fit policy; absent mode retains legacy manual semantics."""
+def normalize_hyperdense_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Validate Schema v2 ``hyper_dense`` parameters including ``shape_mode``.
+
+    Parameters
+    ----------
+    params : dict[str, Any]
+        Raw node parameter mapping. Supports ``algebra``, ``units``, ``bias``
+        (``bool``), and ``shape_mode`` (``"manual"`` or ``"preserve"``). Absent
+        ``shape_mode`` defaults to ``"manual"`` for backward compatibility.
+
+    Returns
+    -------
+    dict[str, Any]
+        Normalized parameter dictionary.
+
+    Raises
+    ------
+    ValueError or ArchitectureError
+        If ``shape_mode``, ``bias``, ``algebra``, or ``units`` are invalid.
+    """
     from .architecture import _normalize_layer_params
     mode = params.get('shape_mode', 'manual')
     if mode not in ('manual', 'preserve'):
@@ -37,7 +70,27 @@ def normalize_hyperdense_params(params):
     return {**normalized, 'shape_mode': mode, 'bias': params.get('bias', True)}
 
 
-def normalize_graph(raw):
+def normalize_graph(raw: dict[str, Any]) -> dict[str, Any]:
+    """Validate and canonicalize a Schema v2 executable graph specification.
+
+    Parameters
+    ----------
+    raw : dict[str, Any]
+        Candidate Schema v2 graph dictionary containing ``schema_version=2``,
+        ``revision``, ``name``, ``sources``, ``nodes``, ``edges``, ``groups``,
+        and ``output``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Deep-copied, canonicalized Schema v2 graph specification.
+
+    Raises
+    ------
+    ValueError
+        If revision, bounds, node IDs, operator kinds, source bindings, port
+        uniqueness, or group definitions violate Schema v2 invariants.
+    """
     from .architecture import normalize_architecture_spec
     if raw.get('schema_version') != 2 or raw.get('revision') != REVISION:
         raise ValueError('Unsupported graph schema or template revision')
@@ -112,7 +165,8 @@ def normalize_graph(raw):
             'groups': [{'id': str(g['id']), 'label': str(g.get('label', g['id']))[:160]} for g in groups], 'output': output}
 
 
-def _walk(value, path):
+def _walk(value: Any, path: str):
+    """Yield ``(port_path, fx_node)`` pairs nested inside FX args/kwargs/slices."""
     if isinstance(value, Node):
         yield path, value
     elif isinstance(value, (list, tuple)):
@@ -126,7 +180,8 @@ def _walk(value, path):
             yield from _walk(getattr(value, key), f'{path}/{key}')
 
 
-def _bind(value, path, incoming, values):
+def _bind(value: Any, path: str, incoming: dict[str, str], values: dict[str, Any]) -> Any:
+    """Substitute live runtime tensor values into an FX argument template."""
     if isinstance(value, Node):
         if path not in incoming:
             raise ValueError(f'Missing connection to {path}')
@@ -142,13 +197,16 @@ def _bind(value, path, incoming, values):
     return value
 
 
-def _attribute(root, path):
+def _attribute(root: nn.Module, path: str) -> Any:
+    """Resolve a dotted attribute path on ``root``."""
+    current: Any = root
     for part in path.split('.'):
-        root = getattr(root, part)
-    return root
+        current = getattr(current, part)
+    return current
 
 
-def _shapes(value):
+def _shapes(value: Any) -> Any:
+    """Summarize tensor or nested-sequence shapes for node inspector metadata."""
     if isinstance(value, torch.Tensor):
         return list(value.shape)
     if isinstance(value, (tuple, list)):
@@ -156,7 +214,35 @@ def _shapes(value):
     return type(value).__name__
 
 
-def convert_to_graph(spec, window=10, horizon=1):
+def convert_to_graph(spec: dict[str, Any], window: int = 10, horizon: int = 1) -> dict[str, Any]:
+    """Lower a Schema v1 sequential architecture into an editable Schema v2 graph.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Schema v1 pipeline specification (or an existing Schema v2 graph, which
+        is returned normalized as-is).
+    window : int, default=10
+        Reference historical window length used during symbolic lowering.
+    horizon : int, default=1
+        Reference forecast horizon used during symbolic lowering.
+
+    Returns
+    -------
+    dict[str, Any]
+        Normalized Schema v2 graph specification with ``sources={"s0": spec}``,
+        explicit ``nodes``, port-addressed ``edges``, stage ``groups``, and
+        ``output`` node ID.
+
+    Examples
+    --------
+    >>> from hypercast4d.architecture import presets
+    >>> from hypercast4d.graph_architecture import convert_to_graph
+    >>> v1 = next(p for p in presets() if p["preset_id"] == "paper-quaternion")
+    >>> v2 = convert_to_graph(v1, window=10, horizon=1)
+    >>> v2["schema_version"]
+    2
+    """
     from .architecture import build_architecture, normalize_architecture_spec
     spec = normalize_architecture_spec(spec)
     if spec['schema_version'] == 2:
@@ -188,13 +274,27 @@ def convert_to_graph(spec, window=10, horizon=1):
                             'groups': list(groups.values()), 'output': nodes[-1]['id']})
 
 
-def _bounded(value, name, maximum=4096):
+def _bounded(value: Any, name: str, maximum: int = 4096) -> int:
+    """Validate an integer module setting in ``[1, maximum]``."""
     if type(value) is not int or not 1 <= value <= maximum:
         raise ValueError(f'{name} must be an integer from 1 to {maximum}')
     return value
 
 
-def module_settings(module):
+def module_settings(module: nn.Module) -> dict[str, Any]:
+    """Extract editable hyperparameter settings from a leaf ``nn.Module``.
+
+    Parameters
+    ----------
+    module : torch.nn.Module
+        Leaf PyTorch module inspected from a lowered source template.
+
+    Returns
+    -------
+    dict[str, Any]
+        Editable settings dictionary (empty when ``module`` has no user-tunable
+        parameters).
+    """
     if isinstance(module, HyperDense):
         return {'out_features': module.out_features, 'algebra': module.algebra.name, 'bias': module.bias is not None}
     if isinstance(module, nn.Linear):
@@ -212,7 +312,31 @@ def module_settings(module):
     return {}
 
 
-def adapt_module(original, params, inputs):
+def adapt_module(
+    original: nn.Module, params: dict[str, Any], inputs: tuple[Any, ...]
+) -> nn.Module:
+    """Clone or re-instantiate a lowered source leaf module for new widths/settings.
+
+    When upstream graph edits alter the incoming feature/channel width or user
+    parameters override ``module_settings(original)``, a fresh compatible module
+    is constructed; otherwise ``original`` is deep-copied with its initialized
+    weights intact.
+
+    Parameters
+    ----------
+    original : torch.nn.Module
+        Template submodule from the lowered source recipe.
+    params : dict[str, Any]
+        Requested parameter overrides stored on the graph node.
+    inputs : tuple[Any, ...]
+        Actual input arguments observed during the dry-run construction pass.
+
+    Returns
+    -------
+    torch.nn.Module
+        Adapted or deep-copied module ready for registration in
+        ``GraphForecaster.blocks``.
+    """
     settings = module_settings(original)
     if set(params) - set(settings):
         raise ValueError(f'Unsupported settings for {type(original).__name__}: {set(params) - set(settings)}')
@@ -260,14 +384,16 @@ def adapt_module(original, params, inputs):
 
 
 class TensorState(nn.Module):
-    """Keep learned attributes as parameters and nonlearned attributes as buffers."""
-    def __len__(self):
+    """Container registering learned tensors as parameters and constants as buffers."""
+
+    def __len__(self) -> int:
         return len(self._parameters) + len(self._buffers)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> torch.Tensor:
         return getattr(self, key)
 
-    def add(self, key, value):
+    def add(self, key: str, value: torch.Tensor) -> None:
+        """Clone and register ``value`` as a parameter or non-learned buffer."""
         if isinstance(value, nn.Parameter):
             self.register_parameter(key, nn.Parameter(value.detach().clone(), requires_grad=value.requires_grad))
         else:
@@ -275,7 +401,40 @@ class TensorState(nn.Module):
 
 
 class GraphForecaster(nn.Module):
-    def __init__(self, spec, window, horizon, features=4):
+    """Executable PyTorch DAG compiled from a Schema v2 graph specification.
+
+    During construction, ``GraphForecaster`` lowers each initialization recipe in
+    ``spec["sources"]``, computes a deterministic topological schedule pruned to
+    ancestors of ``spec["output"]``, and executes a synthetic ``(2, window, features)``
+    dry run under a forked RNG to materialize active submodules, verify port
+    shapes, and populate inspector metadata.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Schema v2 graph specification.
+    window : int
+        Historical lookback window length ``W``.
+    horizon : int
+        Forecast horizon ``H``.
+    features : int, default=4
+        Number of input series per time step.
+
+    Attributes
+    ----------
+    blocks : torch.nn.ModuleDict
+        Active trainable/callable leaf modules keyed by ``"m0"``, ``"m1"``, ...
+    constants : TensorState
+        Registered tensor parameters and buffers referenced via ``get_attr``.
+    order : list[str]
+        Deterministic topological execution order of active node IDs.
+    metadata : dict[str, dict[str, Any]]
+        Per-node port, label, setting, and validated tensor-shape records.
+    """
+
+    def __init__(
+        self, spec: dict[str, Any], window: int, horizon: int, features: int = 4
+    ) -> None:
         super().__init__()
         from .architecture import build_architecture
         self.spec = normalize_graph(spec)
@@ -308,7 +467,8 @@ class GraphForecaster(nn.Module):
         self.train()
         self.receptive_field = window  # Conservative bound for arbitrary DAGs.
 
-    def _order(self):
+    def _order(self) -> list[str]:
+        """Compute deterministic Kahn topological order pruned to ``output`` ancestors."""
         parents = {key: set(inputs.values()) for key, inputs in self.incoming.items()}
         children = {key: [] for key in parents}
         for key, values in parents.items():
@@ -496,8 +656,26 @@ class GraphForecaster(nn.Module):
                 self.metadata[node['id']]['shape_fit'] = module.shape_fit
         return value
 
-    def forward(self, inputs):
-        values = {}
+    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Execute active graph nodes in topological order on ``[B, window, features]``.
+
+        Parameters
+        ----------
+        inputs : torch.Tensor
+            Historical input batch of shape ``(batch, window, features)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Forecast tensor of shape ``(batch, horizon)``.
+
+        Raises
+        ------
+        ValueError
+            If any node raises a shape/port error or the designated output node
+            does not produce shape ``(batch, horizon)``.
+        """
+        values: dict[str, Any] = {}
         for key in self.order:
             node = self.nodes[key]
             try:
@@ -511,7 +689,29 @@ class GraphForecaster(nn.Module):
         return result
 
 
-def validate_graph(spec, window, horizon, features=4):
+def validate_graph(
+    spec: dict[str, Any], window: int, horizon: int, features: int = 4
+) -> dict[str, Any]:
+    """Compile and dry-run ``spec`` to verify port wiring and tensor shapes.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Schema v2 graph specification.
+    window : int
+        Historical window length ``W``.
+    horizon : int
+        Forecast horizon ``H``.
+    features : int, default=4
+        Number of input channels.
+
+    Returns
+    -------
+    dict[str, Any]
+        Validation report with ``valid=True``, normalized ``spec``,
+        ``parameters``, ``graph_nodes`` metadata, and disconnected-node
+        ``warnings``.
+    """
     from .models import parameter_count
     with torch.random.fork_rng(devices=[]):
         model = GraphForecaster(spec, window, horizon, features)
@@ -521,8 +721,29 @@ def validate_graph(spec, window, horizon, features=4):
             'warnings': [f'{n}: disconnected from forecast output' for n in model.nodes if n not in model.order]}
 
 
-def describe_graph(spec, window=10, horizon=1):
-    """Port contracts for draft repair, even when connections/shapes are invalid."""
+def describe_graph(
+    spec: dict[str, Any], window: int = 10, horizon: int = 1
+) -> dict[str, Any]:
+    """Return static port and parameter contracts without requiring valid shapes.
+
+    Used by the Builder UI and CLI to inspect and repair incomplete drafts whose
+    edges or intermediate tensor dimensions do not yet validate.
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Schema v2 graph specification.
+    window : int, default=10
+        Reference window length for lowering ``sources``.
+    horizon : int, default=1
+        Reference forecast horizon for lowering ``sources``.
+
+    Returns
+    -------
+    dict[str, Any]
+        Mapping ``{"graph_nodes": {node_id: {...}}}`` describing labels, input
+        ports, editable settings, and FX operator categories.
+    """
     from .architecture import build_architecture
     spec = normalize_graph(spec)
     with torch.random.fork_rng(devices=[]):
@@ -546,7 +767,27 @@ def describe_graph(spec, window=10, horizon=1):
     return {'graph_nodes': metadata}
 
 
-def graph_hash(spec, evaluation=None):
+def graph_hash(
+    spec: dict[str, Any], evaluation: dict[str, Any] | None = None
+) -> str:
+    """Compute a layout-invariant SHA-256 hash of a Schema v2 graph.
+
+    Strips presentation-only attributes (``name``, ``groups``, node ``group`` and
+    ``label``) and canonicalizes edge ordering while preserving ``nodes`` array
+    order (which tie-breaks topological scheduling of independent branches).
+
+    Parameters
+    ----------
+    spec : dict[str, Any]
+        Schema v2 graph specification.
+    evaluation : dict[str, Any] or None, default=None
+        Optional evaluation configuration to bind into the hash.
+
+    Returns
+    -------
+    str
+        64-character lowercase hexadecimal SHA-256 digest.
+    """
     canonical = normalize_graph(spec)
     canonical.pop('name')
     canonical.pop('groups')

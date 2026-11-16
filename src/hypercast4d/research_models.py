@@ -1,4 +1,6 @@
-"""Compact, target-only adaptations; not reproductions of published benchmarks."""
+"""Lightweight mechanism-inspired forecasting blocks; not benchmark reproductions."""
+
+from __future__ import annotations
 
 import torch
 from torch import nn
@@ -6,13 +8,20 @@ from torch.nn import functional as F
 
 
 class Decomposition(nn.Module):
-    """Expose seasonal and trend channels side by side: [B,T,C] -> [B,T,2C]."""
+    """Moving-average seasonal/trend split mapping ``[B, T, C] -> [B, T, 2C]``.
+
+    Parameters
+    ----------
+    kernel_size : int
+        Odd moving-average window length along the temporal axis.
+    """
 
     def __init__(self, kernel_size: int) -> None:
         super().__init__()
         self.kernel_size = kernel_size
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Concatenate ``(inputs - trend, trend)`` along the channel axis."""
         padding = self.kernel_size // 2
         trend = F.avg_pool1d(F.pad(inputs.transpose(1, 2), (padding, padding),
                                   mode="replicate"), self.kernel_size, stride=1).transpose(1, 2)
@@ -20,7 +29,17 @@ class Decomposition(nn.Module):
 
 
 class TemporalProjection(nn.Module):
-    """Learn a separate time-axis projection per feature, retaining a sequence."""
+    """Independent per-channel linear projection along the temporal axis.
+
+    Parameters
+    ----------
+    steps : int
+        Input temporal length ``T``.
+    width : int
+        Channel count ``C``.
+    output_steps : int
+        Projected temporal length ``U``.
+    """
 
     def __init__(self, steps: int, width: int, output_steps: int) -> None:
         super().__init__()
@@ -29,11 +48,26 @@ class TemporalProjection(nn.Module):
         nn.init.xavier_uniform_(self.weight)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Project ``[B, T, C]`` along time to ``[B, U, C]``."""
         return (torch.einsum("btc,ctu->bcu", inputs, self.weight) + self.bias).transpose(1, 2)
 
 
 class PatchEmbedding(nn.Module):
-    """Joint feature/time patches, projected into a sequence of learned tokens."""
+    """Joint multivariate patch tokenizer with learned positional embeddings.
+
+    Parameters
+    ----------
+    steps : int
+        Input sequence length ``T``.
+    width : int
+        Input channel count ``C``.
+    d_model : int
+        Token embedding dimension.
+    patch_size : int
+        Temporal patch length.
+    stride : int
+        Temporal stride between consecutive patches (``stride <= patch_size``).
+    """
 
     def __init__(self, steps: int, width: int, d_model: int, patch_size: int, stride: int) -> None:
         super().__init__()
@@ -45,13 +79,33 @@ class PatchEmbedding(nn.Module):
         nn.init.normal_(self.position, std=0.02)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Unfold ``[B, T, C]`` into ``[B, output_steps, d_model]`` patch tokens."""
         padded = F.pad(inputs.transpose(1, 2), (0, self.padding), mode="replicate")
         patches = padded.unfold(-1, self.patch_size, self.stride).permute(0, 2, 1, 3)
         return self.projection(patches.flatten(2)) + self.position
 
 
 class SequenceAttention(nn.Module):
-    """Attention along time/patches, or variables with a projection back to time."""
+    """Transformer encoder operating along time tokens or cross-variable tokens.
+
+    Parameters
+    ----------
+    steps : int
+        Input temporal length ``T``.
+    width : int
+        Input channel count ``C``.
+    d_model : int
+        Transformer hidden width (divisible by ``n_heads``).
+    n_heads : int
+        Number of self-attention heads.
+    num_layers : int
+        Number of stacked encoder layers.
+    dropout : float
+        Attention and feedforward dropout probability.
+    variables : bool, default=False
+        When ``True``, attends across the ``C`` variable tokens and projects
+        back to ``steps`` time steps (iTransformer style).
+    """
 
     def __init__(self, steps: int, width: int, d_model: int, n_heads: int,
                  num_layers: int, dropout: float, *, variables: bool = False) -> None:
@@ -66,13 +120,24 @@ class SequenceAttention(nn.Module):
         self.projection = nn.Linear(d_model, steps) if variables else nn.Identity()
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Encode ``[B, T, C]`` along time or variables."""
         tokens = inputs.transpose(1, 2) if self.variables else inputs
         encoded = self.projection(self.encoder(self.embedding(tokens)))
         return encoded.transpose(1, 2) if self.variables else encoded
 
 
 class DLinear(nn.Module):
-    """Moving-average decomposition with separate seasonal/trend projections."""
+    """Target-only moving-average seasonal/trend linear forecaster.
+
+    Parameters
+    ----------
+    window : int
+        Historical lookback window ``W``.
+    horizon : int
+        Forecast horizon ``H``.
+    kernel_size : int
+        Odd moving-average kernel width.
+    """
 
     def __init__(self, window: int, horizon: int, kernel_size: int) -> None:
         super().__init__()
@@ -81,6 +146,7 @@ class DLinear(nn.Module):
         self.trend = nn.Linear(window, horizon)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Forecast target channel ``0`` from ``[B, window, C]`` -> ``[B, horizon]``."""
         target = inputs[:, :, 0]
         padding = self.kernel_size // 2
         trend = F.avg_pool1d(
@@ -122,6 +188,7 @@ class AttentionForecast(nn.Module):
         )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Apply per-window normalization, attention encoding, and inverse scaling."""
         mean = inputs.mean(dim=1, keepdim=True).detach()
         scale = (inputs.var(dim=1, keepdim=True, unbiased=False) + 1e-5).sqrt().detach()
         normalized = (inputs - mean) / scale

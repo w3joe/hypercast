@@ -40,6 +40,16 @@ SURVEY_FAMILIES = {
 
 
 def method_collection() -> dict:
+    """Build the 52-entry literature-linked forecasting method index.
+
+    Returns
+    -------
+    dict[str, Any]
+        Dictionary with ``"sources"`` (survey bibliography records) and
+        ``"methods"`` (alphabetically sorted entries annotated with ``family``,
+        ``status`` in ``{"reference", "adaptation"}``, ``preset_id``, and
+        implementation scope ``notes``).
+    """
     methods = {}
 
     def add(name: str, family: str, source: str, page: int) -> None:

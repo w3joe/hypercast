@@ -1,4 +1,4 @@
-"""Versioned seven-channel HyperDense surgery; historical controls stay frozen."""
+"""[Internal Benchmark Protocol] Versioned seven-channel HyperDense surgery for ETTh1."""
 from contextlib import contextmanager
 import hashlib
 import math
@@ -16,6 +16,7 @@ DIMENSIONS={'complex':2,'quaternion':4,'octonion':8}
 
 @contextmanager
 def ieee_precision():
+    """Force IEEE FP32 precision on cuDNN conv and CUDA matmul backends."""
     conv,matmul=torch.backends.cudnn.conv,torch.backends.cuda.matmul
     before=(conv.fp32_precision,matmul.fp32_precision)
     conv.fp32_precision=matmul.fp32_precision='ieee'
@@ -24,10 +25,12 @@ def ieee_precision():
 
 
 def stream_seed(seed,backbone,role):
+    """Derive a deterministic 63-bit RNG seed for ``(seed, backbone, role)``."""
     return int.from_bytes(hashlib.sha256(f'{PROTOCOL}/{seed}/{backbone}/{role}'.encode()).digest()[:8],'big')%(2**63-1)
 
 
 def mapping(nin,nout,bias,arm,seed,backbone,role,gain):
+    """Construct a variance-matched real, low-rank, or HyperDense operator for ``arm``."""
     if arm not in ARMS[1:] or gain not in (.5,1.):raise ValueError('Invalid controlled mapping')
     variance=2/(nin+nout);rank=None
     with torch.random.fork_rng(devices=[]):
@@ -51,12 +54,15 @@ def mapping(nin,nout,bias,arm,seed,backbone,role,gain):
 
 
 def spectral_permutation(width,dimension):
+    """Compute paired real/imaginary latent block permutation indices for FiLM."""
     if dimension not in (2,4,8) or width%(dimension//2):raise ValueError('Invalid spectral grouping')
     blocks=torch.arange(width).reshape(dimension//2,-1)
     return torch.stack([blocks,blocks+width],dim=1).reshape(-1)
 
 
 class GroupedSpectral(SpectralRealBlock):
+    """FiLM spectral convolution block with paired real/imaginary component grouping."""
+
     def __init__(self,original,arm,seed,gain):
         nn.Module.__init__(self)
         self.modes,self.out_channels=original.modes,original.out_channels
@@ -67,11 +73,13 @@ class GroupedSpectral(SpectralRealBlock):
         self.maps=nn.ModuleList([mapping(2*original.in_channels,2*original.out_channels,False,arm,seed,'film',f'frequency{k}',gain) for k in range(self.modes)])
 
     def apply_mode(self,a,k):
+        """Apply permuted per-frequency mapping ``k`` to complex mode ``a``."""
         x=torch.cat([a.real,a.imag],dim=-1)[...,self.input_permutation]
         return self.maps[k](x)[...,self.output_inverse]
 
 
 def build(backbone,arm,seed,gain=1.):
+    """Construct a single-site controlled MICN or FiLM model and provenance report."""
     if backbone not in SITES or arm not in ARMS or gain not in (.5,1.):raise ValueError('Unsupported transfer control')
     model=native_build(backbone,seed,'relative_residual',features=7)
     site=SITES[backbone];original=model.get_submodule(site);untouched=digest_except(model,site)

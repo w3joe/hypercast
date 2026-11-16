@@ -1,4 +1,4 @@
-"""Configurable, resumable training engine isolated from frozen pilot code."""
+"""[Internal Benchmark Protocol] Resumable MAE training engine for ETTh1 transfer studies."""
 import time
 from pathlib import Path
 import torch
@@ -9,6 +9,7 @@ from .hyperdense_transfer import ieee_precision
 
 
 def finite(value):
+    """Raise ``RuntimeError`` if ``value`` or any nested tensor contains NaN or Inf."""
     if isinstance(value,torch.Tensor) and not bool(torch.isfinite(value).all()):raise RuntimeError('Nonfinite tensor')
     if isinstance(value,dict):
         for v in value.values():finite(v)
@@ -17,6 +18,7 @@ def finite(value):
 
 
 def run(model,train,inner,output,*,seed,epochs,learning_rate=.001,schedule='constant',calibration=False,device='cpu',metadata=None,resume=False,deadline=None):
+    """Run resumable MAE training with exponential/constant LR schedule and soft deadlines."""
     if learning_rate not in (.0001,.0003,.001) or schedule not in ('constant','exponential') or not 1<=epochs<=150:raise ValueError('Unsupported settings')
     if calibration and not isinstance(inner,torch.Tensor):raise ValueError('Calibration accepts inner inputs only')
     output=Path(output);output.mkdir(parents=True,exist_ok=True);latest=output/'latest.pt'

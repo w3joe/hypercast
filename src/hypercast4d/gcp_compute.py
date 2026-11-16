@@ -15,6 +15,7 @@ GCP_COUNTS = {"L4": [1, 2, 4, 8, 16], "A100-40GB": [1, 2, 4, 8]}
 
 
 def normalize_gcp_execution(raw: dict[str, Any]) -> dict[str, Any]:
+    """Validate GCP GPU family (``L4`` or ``A100-40GB``) and GPU count (sharding 16 L4s across 2 VMs)."""
     gpu = raw.get("gpu", "L4")
     count = raw.get("gpu_count", 1)
     if not isinstance(gpu, str) or gpu not in GCP_MACHINES:
@@ -29,6 +30,7 @@ def normalize_gcp_execution(raw: dict[str, Any]) -> dict[str, Any]:
 
 
 def gcp_config() -> dict[str, str]:
+    """Read and validate ``HYPERCAST_GCP_*`` environment variables."""
     config = {}
     for key in ("PROJECT", "ZONE", "BUCKET", "SERVICE_ACCOUNT", "IMAGE", "IMAGE_PROJECT", "SUBNET"):
         value = os.environ.get(f"HYPERCAST_GCP_{key}", "").strip()
@@ -43,6 +45,7 @@ def gcp_config() -> dict[str, str]:
 
 
 def gcp_capability() -> dict[str, Any]:
+    """Probe ``gcloud`` authentication and ``HYPERCAST_GCP_*`` configuration status."""
     available = False
     message = "Install Google Cloud CLI and run gcloud auth login; see docs/gcp_gpu.md"
     config: dict[str, str] = {}

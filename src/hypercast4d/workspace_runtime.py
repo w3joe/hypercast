@@ -1,4 +1,13 @@
-"""Loopback backend discovery and single-owner workspace locking (macOS/Linux)."""
+"""Loopback backend discovery and single-owner workspace locking (macOS/Linux).
+
+Coordinates the browser Playground server and ``hypercast`` CLI invocations via
+an advisory ``flock`` on ``<results_root>/.runtime/owner.lock`` and a loopback
+discovery record ``<results_root>/.runtime/server.json``.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator
 from contextlib import contextmanager
 import fcntl
 import json
@@ -9,13 +18,15 @@ import socket
 import subprocess
 import sys
 import time
+from typing import Any
 import urllib.error
 import urllib.request
 
 CLI_PROTOCOL = 1
 
 
-def request(url, path, payload=None):
+def request(url: str, path: str, payload: dict[str, Any] | None = None) -> Any:
+    """Send a loopback HTTP GET or JSON POST request to ``url + path``."""
     data = None if payload is None else json.dumps(payload).encode()
     req = urllib.request.Request(url + path, data=data, headers={'Content-Type': 'application/json'})
     try:
@@ -31,7 +42,8 @@ def request(url, path, payload=None):
         raise ValueError(str(raw)) from error
 
 
-def identity(project, root):
+def identity(project: str | Path, root: str | Path) -> dict[str, Any]:
+    """Build the workspace runtime identity payload checked during CLI discovery."""
     from importlib.metadata import version
     from .graph_architecture import REVISION
     return {'cli_protocol': CLI_PROTOCOL, 'project_root': str(Path(project).resolve()),
@@ -40,7 +52,10 @@ def identity(project, root):
 
 
 @contextmanager
-def workspace_owner(project, root, url=None):
+def workspace_owner(
+    project: str | Path, root: str | Path, url: str | None = None
+) -> Iterator[None]:
+    """Acquire an exclusive non-blocking ``flock`` on ``root/.runtime/owner.lock``."""
     directory = Path(root).resolve() / '.runtime'
     directory.mkdir(parents=True, exist_ok=True)
     with (directory / 'owner.lock').open('a') as lock:
@@ -65,7 +80,8 @@ def workspace_owner(project, root, url=None):
             fcntl.flock(lock, fcntl.LOCK_UN)
 
 
-def discover(project, root):
+def discover(project: str | Path, root: str | Path) -> dict[str, Any] | None:
+    """Locate and verify a live loopback backend owning ``root``, or return ``None``."""
     path = Path(root) / '.runtime/server.json'
     if not path.exists():
         return None
@@ -88,7 +104,10 @@ def discover(project, root):
     return {**live, 'url': url}
 
 
-def ensure_backend(project, root, port=0):
+def ensure_backend(
+    project: str | Path, root: str | Path, port: int = 0
+) -> dict[str, Any]:
+    """Reuse an active loopback backend for ``root`` or spawn one in the background."""
     found = discover(project, root)
     if found:
         return found
@@ -124,7 +143,8 @@ def ensure_backend(project, root, port=0):
     raise RuntimeError(f'Backend startup timed out; inspect {directory / "server.log"}')
 
 
-def stop_backend(found):
+def stop_backend(found: dict[str, Any]) -> None:
+    """Terminate an idle discovered backend via ``SIGTERM``, refusing if jobs are active."""
     active = [job for job in request(found['url'], '/api/v1/jobs')
               if job['status']['state'] in {'queued', 'starting', 'running'}]
     if active:
@@ -132,7 +152,13 @@ def stop_backend(found):
     os.kill(found['pid'], signal.SIGTERM)
 
 
-def serve(project, root, port=0, legacy=None):
+def serve(
+    project: str | Path,
+    root: str | Path,
+    port: int = 0,
+    legacy: str | Path | None = None,
+) -> None:
+    """Bind a loopback socket on ``127.0.0.1`` and run the Playground Uvicorn server."""
     import uvicorn
     from .playground import create_app
     sock = socket.socket()

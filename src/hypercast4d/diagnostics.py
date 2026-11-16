@@ -27,23 +27,41 @@ DIAGNOSTIC_COLUMNS = (
 
 
 def safe_ratio(numerator: float, denominator: float) -> float | None:
+    """Return ``numerator / denominator`` when ``denominator > 0``, else ``None``."""
     return float(numerator / denominator) if denominator > 0 else None
 
 
 def returns(values: np.ndarray, origin: np.ndarray) -> np.ndarray:
+    """Compute relative returns ``(values - origin) / origin`` for ``origin > 0``."""
     result = np.full(np.shape(values), np.nan, dtype=np.float64)
     np.divide(values - origin, origin, out=result, where=origin > 0)
     return result
 
 
 def direction(values: np.ndarray) -> np.ndarray:
+    """Classify returns into ``{-1, 0, +1}`` treating ``|r| <= 1e-6`` as flat ``0``."""
     return np.where(np.abs(values) <= RETURN_TOLERANCE, 0, np.sign(values))
 
 
 def training_references(
     training_target: np.ndarray, horizon: int
 ) -> list[dict[str, Any]]:
-    """Each h-step reference uses pairs wholly contained in training rows."""
+    """Compute per-lead large-move quantiles and modal direction baselines on training rows.
+
+    Parameters
+    ----------
+    training_target : numpy.ndarray
+        1D array of raw-unit training target observations ``frame.iloc[:train_end, 0]``.
+    horizon : int
+        Maximum forecast lead ``H``.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        One reference dictionary per lead ``1..horizon`` containing
+        ``large_move_threshold`` (90th percentile of ``|r_h|``) and modal
+        ``direction_baseline`` in ``{-1, 0, 1}``.
+    """
     y = np.asarray(training_target, dtype=np.float64)
     references = []
     for lead in range(1, horizon + 1):
@@ -72,6 +90,26 @@ def forecast_diagnostics(
     origin: np.ndarray,
     references: list[dict[str, Any]],
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Compute per-lead and run-level forecast diagnostics in original target units.
+
+    Parameters
+    ----------
+    prediction : numpy.ndarray
+        Predicted values of shape ``(num_origins, horizon)`` in original units.
+    target : numpy.ndarray
+        Ground-truth values of shape ``(num_origins, horizon)`` in original units.
+    origin : numpy.ndarray
+        Last observed target price at each forecast origin, shape ``(num_origins,)``.
+    references : list[dict[str, Any]]
+        Per-lead training references returned by ``training_references``.
+
+    Returns
+    -------
+    aggregate : dict[str, Any]
+        Run-level summary averaging defined per-lead scores and summing counts.
+    rows : list[dict[str, Any]]
+        Per-lead diagnostic dictionaries for leads ``1..horizon``.
+    """
     prediction, target = np.asarray(prediction, dtype=np.float64), np.asarray(
         target, dtype=np.float64
     )
@@ -157,6 +195,7 @@ def forecast_diagnostics(
 
 
 def initialize_diagnostics(destination: Path) -> None:
+    """Truncate ``predictions.csv`` and write metric definitions to ``diagnostics.json``."""
     (destination / "predictions.csv").write_text("", encoding="utf-8")
     (destination / "diagnostics.json").write_text(
         json.dumps(
@@ -187,6 +226,7 @@ def append_predictions(
     references: list[dict[str, Any]],
     **identity: Any,
 ) -> None:
+    """Append origin/lead point forecasts, persistence values, and returns to ``predictions.csv``."""
     starts = np.asarray(target_start)
     count, horizon = target.shape
     origins = frame.iloc[starts - 1, 0].to_numpy(dtype=np.float64)

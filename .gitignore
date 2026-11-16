@@ -6,6 +6,7 @@ __pycache__/
 htmlcov/
 build/
 dist/
+site/
 *.egg-info/
 .DS_Store
 node_modules/
@@ -16,3 +17,9 @@ data/*
 results/*
 !results/.gitkeep
 runs/
+.vercel/
+.env
+.env.*
+!.env.example
+deploy/*.secret
+deploy/*.env

@@ -186,14 +186,17 @@ def normalize_architecture_spec(raw: dict[str, Any]) -> dict[str, Any]:
             f"input representation must be one of {INPUT_REPRESENTATIONS}"
         )
     order_raw = input_raw.get("feature_order", list(range(COMPONENT_COUNT)))
-    if not isinstance(order_raw, list) or not order_raw:
-        raise ArchitectureError("feature_order must be a non-empty list")
-    feature_order = [
-        _bounded_int(item, "feature index", 0, COMPONENT_COUNT - 1)
-        for item in order_raw
-    ]
-    if len(feature_order) != len(set(feature_order)):
-        raise ArchitectureError("feature_order cannot contain duplicate indices")
+    if order_raw == "all":
+        feature_order: list[int] | str = "all"
+    else:
+        if not isinstance(order_raw, list) or not order_raw:
+            raise ArchitectureError("feature_order must be 'all' or a non-empty list")
+        feature_order = [
+            _bounded_int(item, "feature index", 0, 4095)
+            for item in order_raw
+        ]
+        if len(feature_order) != len(set(feature_order)):
+            raise ArchitectureError("feature_order cannot contain duplicate indices")
 
     layers_raw = raw.get("layers", [])
     if not isinstance(layers_raw, list):
@@ -257,7 +260,7 @@ def _normalize_layer_params(layer_type: str, params: dict[str, Any]) -> dict[str
     """Validate and populate default hyperparameters for ``layer_type``."""
     if layer_type.startswith("tslib_"):
         defaults = upstream_defaults(layer_type[6:])
-        bounds = {"d_model": (8, 256), "num_layers": (1, 3), "n_heads": (1, 16)}
+        bounds = {"d_model": (8, 1024), "num_layers": (1, 3), "n_heads": (1, 16)}
         normalized = {key: (_bounded_float(params.get(key, value), key, 0, 0.95)
                             if key == "dropout" else _bounded_int(params.get(key, value), key, *bounds[key]))
                       for key, value in defaults.items()}
@@ -296,7 +299,7 @@ def _normalize_layer_params(layer_type: str, params: dict[str, Any]) -> dict[str
                 raise ArchitectureError("PatchTST stride must not exceed patch_size")
         return normalized
     if layer_type == "dense":
-        return {"units": _bounded_int(params.get("units", 32), "units", 1, 512)}
+        return {"units": _bounded_int(params.get("units", 32), "units", 1, 4096)}
     if layer_type == "hyper_dense":
         algebra = str(params.get("algebra", "quaternion"))
         if algebra not in ALGEBRAS:
@@ -304,7 +307,7 @@ def _normalize_layer_params(layer_type: str, params: dict[str, Any]) -> dict[str
         dimension = get_algebra(algebra).component_count
         return {
             "units": _bounded_int(
-                params.get("units", 8), "units", 1, 512 // dimension
+                params.get("units", 8), "units", 1, 4096 // dimension
             ),
             "algebra": algebra,
         }
@@ -727,8 +730,11 @@ class ExperimentalForecaster(nn.Module):
             raise ArchitectureError("window must be at least 2 and horizon positive")
         self.spec = normalize_architecture_spec(spec)
         self.representation = self.spec["input"]["representation"]
-        self.feature_order = tuple(self.spec["input"]["feature_order"])
-        if max(self.feature_order) >= features:
+        raw_order = self.spec["input"]["feature_order"]
+        self.feature_order = (
+            tuple(range(features)) if raw_order == "all" else tuple(raw_order)
+        )
+        if not self.feature_order or max(self.feature_order) >= features:
             raise ArchitectureError("feature_order references an unavailable feature")
         steps = window - 1 if self.representation == "differences" else window
         shape = TensorShape("sequence", len(self.feature_order), steps)
@@ -910,7 +916,7 @@ def validate_architecture(
     return {
         "valid": True,
         "spec": normalized,
-        "input_shape": f"[B, {input_steps}, {len(normalized['input']['feature_order'])}]",
+        "input_shape": f"[B, {input_steps}, {len(model.feature_order)}]",
         "output_shape": f"[B, {horizon}]",
         "parameters": parameter_count(model),
         "receptive_field": model.receptive_field,

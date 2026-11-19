@@ -118,15 +118,42 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-### Download the paper data
+### Download benchmark datasets
 
-After installation, download and extract the publisher's supplementary data:
+After installation, download and verify the 4D paper workbook (or all 11
+registered benchmark datasets):
 
 ```bash
+# Paper dataset only (data/raw/paper_data.xlsx)
 hypercast4d-download
+
+# Download all 11 datasets: Copper + TSLib (ETTh1, ETTh2, ETTm1, ETTm2,
+# Weather, Electricity, Traffic, Exchange, ILI) + NYC Taxi Trip Records
+hypercast4d-download --all
+
+# Or download specific datasets and inspect availability
+hypercast4d-download --dataset etth2 --dataset weather --dataset nyc_taxi
+hypercast4d-download --list
 ```
 
-This command:
+Supported datasets in the Playground (`Run → Evaluation settings → Dataset`) and
+`hypercast` CLI (`--dataset <id>`):
+
+| ID | Dataset | Channels | Granularity | Rows | Default Target |
+|---|---|---:|---|---:|---|
+| `copper` | Copper (4D paper) | 4 | daily | 2,008 | `Copper` |
+| `etth1` | ETTh1 | 7 | hourly | 17,420 | `OT` |
+| `etth2` | ETTh2 | 7 | hourly | 17,420 | `OT` |
+| `ettm1` | ETTm1 | 7 | 15-min | 69,680 | `OT` |
+| `ettm2` | ETTm2 | 7 | 15-min | 69,680 | `OT` |
+| `weather` | Weather | 21 | 10-min | 52,696 | `OT` |
+| `electricity` | Electricity (ECL) | 321 | hourly | 26,304 | `OT` |
+| `traffic` | Traffic | 862 | hourly | 17,544 | `OT` |
+| `exchange` | Exchange Rate | 8 | daily | 7,588 | `OT` |
+| `ili` | ILI (National Illness) | 7 | weekly | 966 | `OT` |
+| `nyc_taxi` | NYC Taxi Trip Records (2024 H1) | 8 | hourly | 4,368 | `trip_count` |
+
+The default `hypercast4d-download` command:
 
 1. Downloads the supplementary ZIP from Springer Nature.
 2. Checks it against a pinned SHA-256 checksum.

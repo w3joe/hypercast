@@ -151,10 +151,11 @@ export const offlineApi = {
     if (!presetId || !data.presets[presetId]) throw new Error('Offline conversion is available for the bundled presets and schema 2 graph imports.')
     return structuredClone(data.presets[presetId].graph)
   },
-  describeGraph: async (architecture: GraphSpec) => {
+  describeGraph: async (architecture: GraphSpec, _window?: number, _horizon?: number, dataPath?: string) => {
     const data = await manifest()
     const graph = assertGraph(architecture)
-    const exact = exactReference(data, graph)
+    const defaultData = !dataPath || dataPath === 'data/raw/paper_data.xlsx'
+    const exact = defaultData ? exactReference(data, graph) : undefined
     return {
       graph_nodes: exact ? structuredClone(exact.graph_nodes) : referenceMetadata(data, graph),
       parameters: exact?.parameters ?? null,
@@ -162,13 +163,15 @@ export const offlineApi = {
       reference: Boolean(exact),
     }
   },
-  validateGraph: async (architecture: GraphSpec, window: number, horizon: number): Promise<GraphValidation> => {
+  validateGraph: async (architecture: GraphSpec, window: number, horizon: number, dataPath?: string): Promise<GraphValidation> => {
     const data = await manifest()
     const graph = assertGraph(architecture)
-    const exact = exactReference(data, graph)
+    const defaultData = !dataPath || dataPath === 'data/raw/paper_data.xlsx'
+    const exact = defaultData ? exactReference(data, graph) : undefined
     if (!exact || window !== data.reference_cell.window || horizon !== data.reference_cell.horizon) unavailable()
     return { valid: true, spec: graph, parameters: exact.parameters, graph_nodes: structuredClone(exact.graph_nodes), warnings: [...exact.warnings] }
   },
+  downloadDataset: async () => unavailable(),
   graphRecords: async () => readRecords(),
   saveGraph: async (architecture: GraphSpec, view: GraphViewState, id?: string) => {
     const graph = assertGraph(architecture)

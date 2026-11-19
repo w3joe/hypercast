@@ -104,8 +104,8 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
     setLoading(true); setError('')
     try {
       const cell = evaluation.cells[0] ?? { window: 10, horizon: 1 }
-      const converted = await api.convert(spec, cell.window, cell.horizon)
-      const description = await api.describeGraph(converted, cell.window, cell.horizon)
+      const converted = await api.convert(spec, cell.window, cell.horizon, evaluation.data_path)
+      const description = await api.describeGraph(converted, cell.window, cell.horizon, evaluation.data_path)
       if (sequence !== loadSequence.current) return
       const next = { ...converted, locked: Boolean(spec.locked), preset_id: spec.preset_id }
       const view = safeView(record?.view, converted)
@@ -188,7 +188,7 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
       try {
         if (offline) {
           const cell = evaluation.cells[0] ?? { window: catalog.offline!.reference_window, horizon: catalog.offline!.reference_horizon }
-          const description = await api.describeGraph(graph, cell.window, cell.horizon)
+          const description = await api.describeGraph(graph, cell.window, cell.horizon, evaluation.data_path)
           if (!cancelled) {
             setMetadata(previous => ({ ...previous, ...description.graph_nodes }))
             setValidatedGraph(description.reference ? graph : null)
@@ -204,7 +204,7 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
         let parameterCount: number | null = null
         for (const cell of evaluation.cells) {
           try {
-            const result = await api.validateGraph(graph, cell.window, cell.horizon)
+            const result = await api.validateGraph(graph, cell.window, cell.horizon, evaluation.data_path)
             first ??= result.graph_nodes; parameterCount ??= result.parameters; notices.push(...result.warnings)
           } catch (e) { throw new Error(`${cell.window}/${cell.horizon}: ${e instanceof Error ? e.message : e}`) }
           if (cancelled) return
@@ -214,19 +214,19 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
       finally { if (!cancelled) setValidating(false) }
     }, 300)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [graph, evaluation.cells, offline])
+  }, [graph, evaluation.cells, evaluation.data_path, offline])
   const addModel = async (id: string) => {
     const preset = catalog.presets.find(p => p.preset_id === id)
     if (!preset || !graph || graph.locked) return
     setLoading(true)
     try {
       const cell = evaluation.cells[0] ?? { window: 10, horizon: 1 }
-      const template = await api.convert(preset, cell.window, cell.horizon)
-      const description = await api.describeGraph(template, cell.window, cell.horizon)
+      const template = await api.convert(preset, cell.window, cell.horizon, evaluation.data_path)
+      const description = await api.describeGraph(template, cell.window, cell.horizon, evaluation.data_path)
       const s = current.current
       if (!s || s.graph !== graph) throw new Error('The graph changed while loading. Please add the model again.')
       const combined = appendGraph(graph, template, description.graph_nodes)
-      const contracts = await api.describeGraph(combined, cell.window, cell.horizon)
+      const contracts = await api.describeGraph(combined, cell.window, cell.horizon, evaluation.data_path)
       if (current.current?.graph !== graph) throw new Error('The graph changed while loading. Please add the model again.')
       setMetadata(previous => ({ ...previous, ...contracts.graph_nodes }))
       commit({ ...s, graph: combined })
@@ -282,14 +282,14 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
     const selectedEvaluation = evaluation
     try {
       const selectedAlgebra = algebra ?? replacementAlgebra
-      const { spec: next } = await api.editGraph(graph, { action: 'replace', id: inspect.id, kind: target, params: { algebra: selectedAlgebra } }, selectedEvaluation.cells)
+      const { spec: next } = await api.editGraph(graph, { action: 'replace', id: inspect.id, kind: target, params: { algebra: selectedAlgebra } }, selectedEvaluation.cells, selectedEvaluation.data_path)
       let preview: Record<string, GraphNodeInfo> | undefined
       if (offline) {
-        preview = (await api.describeGraph(next, catalog.offline!.reference_window, catalog.offline!.reference_horizon)).graph_nodes
+        preview = (await api.describeGraph(next, catalog.offline!.reference_window, catalog.offline!.reference_horizon, selectedEvaluation.data_path)).graph_nodes
       } else {
         for (const cell of selectedEvaluation.cells) {
-          const before = await api.validateGraph(graph, cell.window, cell.horizon)
-          const after = await api.validateGraph(next, cell.window, cell.horizon)
+          const before = await api.validateGraph(graph, cell.window, cell.horizon, selectedEvaluation.data_path)
+          const after = await api.validateGraph(next, cell.window, cell.horizon, selectedEvaluation.data_path)
           if (JSON.stringify(before.graph_nodes[inspect.id]?.shape) !== JSON.stringify(after.graph_nodes[inspect.id]?.shape)) throw new Error(`The replacement changes this layer’s shape for window ${cell.window} / horizon ${cell.horizon}. Original layer kept.`)
           preview ??= after.graph_nodes
         }
@@ -441,7 +441,7 @@ export default function GraphBuilder({ catalog, active = true }: { catalog: Cata
     {library ? <MethodCollection catalog={catalog} active={active} onLoad={id => { const p = catalog.presets.find(p => p.preset_id === id); if (p) void load(p) }} /> : <div className="graph-canvas architecture-canvas" ref={canvasRef} aria-label="Architecture canvas" tabIndex={0}>
       <ArchitectureDiagram key={loadKey} ref={diagram} scene={scene} selected={selected} selectedEdge={selectedEdge} active={active} stale={validatedGraph !== graph} inserting={!graph?.locked && (panel === 'add' || Boolean(moveId))} camera={camera.current} onCamera={next => { camera.current = next }} onSelect={select} onClearSelection={() => { setSelected([]); setSelectedEdge(null) }} onEdge={selectEdge} onInsert={chooseInsertion} onToggle={toggle} expandedGroups={overview?.stages.filter(g => (snapshot?.view.expandedStages ?? []).includes(g.id)) ?? []} locked={Boolean(graph?.locked)} />
       {snapshot && <div className="canvas-action-toolbar" role="group" aria-label="Canvas actions"><button type="button" aria-label="Undo" title="Undo" disabled={!past.current.length} onClick={() => undo()}><Undo2 size={18} /></button><button type="button" aria-label="Redo" title="Redo" disabled={!future.current.length} onClick={() => undo(true)}><Redo2 size={18} /></button><span className="canvas-action-divider" /><button type="button" aria-label="Zoom out canvas" title="Zoom out" onClick={() => diagram.current?.zoom(1 / 1.2)}><ZoomOut size={18} /></button><button type="button" aria-label="Zoom in canvas" title="Zoom in" onClick={() => diagram.current?.zoom(1.2)}><ZoomIn size={18} /></button><button type="button" aria-label="Fit diagram" title="Fit diagram" onClick={() => { pendingFocus.current = '__all__'; diagram.current?.fit() }}><Maximize size={18} /></button><span className="canvas-action-divider" /><button type="button" aria-label="Reset layout" title="Reset layout · stage overview" onClick={() => { pendingFocus.current = '__all__'; commit({ ...snapshot, view: { ...emptyView(), collapsed: snapshot.graph.groups.map(g => g.id) } }) }}><RotateCcw size={18} /></button></div>}
-      {weightsOpen && graph && <div className="canvas-weight-overlay"><WeightInspector graph={graph} nodeId={inspect?.id} window={evaluation.cells[0]?.window ?? 10} horizon={evaluation.cells[0]?.horizon ?? 1} onClose={() => setWeightsOpen(false)} active={active} /></div>}
+      {weightsOpen && graph && <div className="canvas-weight-overlay"><WeightInspector graph={graph} nodeId={inspect?.id} window={evaluation.cells[0]?.window ?? 10} horizon={evaluation.cells[0]?.horizon ?? 1} dataPath={evaluation.data_path} onClose={() => setWeightsOpen(false)} active={active} /></div>}
     </div>}
   </section>
 }

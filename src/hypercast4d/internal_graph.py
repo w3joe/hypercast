@@ -152,7 +152,11 @@ def trace_core(core: UpstreamSequence) -> dict[str, Any]:
 
 
 def architecture_internal_graph(
-    spec: dict[str, Any], layer_id: str, window: int = 10, horizon: int = 1
+    spec: dict[str, Any],
+    layer_id: str,
+    window: int = 10,
+    horizon: int = 1,
+    features: int = 4,
 ) -> dict[str, Any]:
     """Build ``spec`` under an isolated RNG seed and trace TSLib block ``layer_id``.
 
@@ -166,6 +170,8 @@ def architecture_internal_graph(
         Preview lookback window length.
     horizon : int, default=1
         Preview forecast horizon.
+    features : int, default=4
+        Number of dataset input channels.
 
     Returns
     -------
@@ -175,7 +181,7 @@ def architecture_internal_graph(
     # Construction and tracing must not advance the application's CPU RNG.
     with _GRAPH_LOCK, torch.random.fork_rng(devices=[]):
         torch.manual_seed(37)
-        model = build_architecture(spec, window, horizon)
+        model = build_architecture(spec, window, horizon, features=features)
         for layer, module in zip(model.spec['layers'], model.layers):
             if layer['id'] == layer_id:
                 if not isinstance(module, UpstreamSequence):

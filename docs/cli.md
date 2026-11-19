@@ -9,6 +9,8 @@ sweep orchestration is not included. macOS and Linux are supported.
 ```sh
 python -m pip install -e .
 hypercast --help
+hypercast dataset list
+hypercast dataset download --all
 hypercast model list
 hypercast layer types
 ```
@@ -93,7 +95,8 @@ must be copied through `model create`; editing never changes the preset catalogu
 
 ```sh
 hypercast experiment run experiment.yaml --evaluation evaluation.yaml --epochs 50 --dry-run
-hypercast experiment run experiment.yaml --target modal --gpu L4 --yes --detach
+hypercast experiment run experiment.yaml --dataset weather --preset quick --dry-run
+hypercast experiment run experiment.yaml --dataset nyc_taxi --preset standard --target modal --gpu L4 --yes --detach
 hypercast experiment run experiment.yaml --target gcp --gpu L4 --gpu-count 16 --yes --detach
 hypercast job list
 hypercast job status JOB_ID --follow

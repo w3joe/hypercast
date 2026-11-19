@@ -107,7 +107,24 @@ export type CatalogLayer = {
   defaults: LayerParams
 }
 
+/** Metadata descriptor for a registered forecasting benchmark dataset. */
+export type DatasetInfo = {
+  id: string
+  label: string
+  group: string
+  data_path: string
+  target_column: string
+  features: number
+  rows: number
+  frequency: string
+  columns: string[]
+  available: boolean
+  download_command: string
+  description: string
+}
+
 export type Catalog = {
+  datasets?: DatasetInfo[]
   demo?: DemoLimits
   offline?: { reference_window: number; reference_horizon: number; preset_count: number }
   method_collection?: MethodCollection

@@ -214,7 +214,9 @@ def _shapes(value: Any) -> Any:
     return type(value).__name__
 
 
-def convert_to_graph(spec: dict[str, Any], window: int = 10, horizon: int = 1) -> dict[str, Any]:
+def convert_to_graph(
+    spec: dict[str, Any], window: int = 10, horizon: int = 1, features: int = 4
+) -> dict[str, Any]:
     """Lower a Schema v1 sequential architecture into an editable Schema v2 graph.
 
     Parameters
@@ -226,6 +228,8 @@ def convert_to_graph(spec: dict[str, Any], window: int = 10, horizon: int = 1) -
         Reference historical window length used during symbolic lowering.
     horizon : int, default=1
         Reference forecast horizon used during symbolic lowering.
+    features : int, default=4
+        Number of dataset input channels used during symbolic lowering.
 
     Returns
     -------
@@ -248,7 +252,7 @@ def convert_to_graph(spec: dict[str, Any], window: int = 10, horizon: int = 1) -
     if spec['schema_version'] == 2:
         return spec
     with torch.random.fork_rng(devices=[]):
-        source = lower_source(build_architecture(spec, window, horizon))
+        source = lower_source(build_architecture(spec, window, horizon, features))
     nodes, edges, groups = [], [], {}
     for node in source.graph.nodes:
         key = node.name
@@ -722,7 +726,7 @@ def validate_graph(
 
 
 def describe_graph(
-    spec: dict[str, Any], window: int = 10, horizon: int = 1
+    spec: dict[str, Any], window: int = 10, horizon: int = 1, features: int = 4
 ) -> dict[str, Any]:
     """Return static port and parameter contracts without requiring valid shapes.
 
@@ -737,6 +741,8 @@ def describe_graph(
         Reference window length for lowering ``sources``.
     horizon : int, default=1
         Reference forecast horizon for lowering ``sources``.
+    features : int, default=4
+        Number of dataset input channels for lowering ``sources``.
 
     Returns
     -------
@@ -747,7 +753,7 @@ def describe_graph(
     from .architecture import build_architecture
     spec = normalize_graph(spec)
     with torch.random.fork_rng(devices=[]):
-        sources = {key: lower_source(build_architecture(value, window, horizon)) for key, value in spec['sources'].items()}
+        sources = {key: lower_source(build_architecture(value, window, horizon, features)) for key, value in spec['sources'].items()}
     templates = {key: {n.name: n for n in source.graph.nodes} for key, source in sources.items()}
     metadata = {}
     for node in spec['nodes']:

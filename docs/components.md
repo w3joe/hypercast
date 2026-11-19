@@ -104,3 +104,23 @@ Call [`presets()`][hypercast4d.architecture.presets] or `hypercast model list` t
 - **Editable Native Templates (2)**: `residual-tcn`, `quaternion-gru-residual`
 - **Editable Mechanism-Inspired Templates (3)**: `research-dlinear`, `research-patchtst`, `research-itransformer`
 - **Editable TSLib-Core Templates (15)**: `tslib-dlinear`, `tslib-patchtst`, `tslib-itransformer`, `tslib-timesnet`, `tslib-crossformer`, `tslib-film`, `tslib-frets`, `tslib-lightts`, `tslib-micn`, `tslib-msgnet`, `tslib-scinet`, `tslib-segrnn`, `tslib-timemixer`, `tslib-timexer`, `tslib-tsmixer`
+
+---
+
+## 7. Registered Benchmark Datasets (11 Total)
+
+Managed by [`hypercast4d.datasets`][hypercast4d.datasets] (`hypercast4d-download --all` or `hypercast dataset download --all`):
+
+| ID | Source Family | Channels | Frequency | Rows | Default Target | Path |
+|---|---|---:|---|---:|---|---|
+| `copper` | Paper | 4 | daily | 2,008 | `Copper` | `data/raw/paper_data.xlsx` |
+| `etth1` | TSLib | 7 | hourly | 17,420 | `OT` | `data/external/tslib/ETTh1.csv` |
+| `etth2` | TSLib | 7 | hourly | 17,420 | `OT` | `data/external/tslib/ETTh2.csv` |
+| `ettm1` | TSLib | 7 | 15-min | 69,680 | `OT` | `data/external/tslib/ETTm1.csv` |
+| `ettm2` | TSLib | 7 | 15-min | 69,680 | `OT` | `data/external/tslib/ETTm2.csv` |
+| `weather` | TSLib | 21 | 10-min | 52,696 | `OT` | `data/external/tslib/weather.csv` |
+| `electricity` | TSLib | 321 | hourly | 26,304 | `OT` | `data/external/tslib/electricity.csv` |
+| `traffic` | TSLib | 862 | hourly | 17,544 | `OT` | `data/external/tslib/traffic.csv` |
+| `exchange` | TSLib | 8 | daily | 7,588 | `OT` | `data/external/tslib/exchange_rate.csv` |
+| `ili` | TSLib | 7 | weekly | 966 | `OT` | `data/external/tslib/national_illness.csv` |
+| `nyc_taxi` | NYC TLC | 8 | hourly | 4,368 | `trip_count` | `data/external/nyc_taxi/nyc_taxi.csv` |

@@ -37,15 +37,17 @@ const remoteApi = {
   archivedForecasts: (id: string, window: number, horizon: number, seed: number, fold: number, lead: number) =>
     request<import('./ForecastReplay').ForecastResponse>(`/api/v1/comparison-archives/${encodeURIComponent(id)}/forecasts?${new URLSearchParams({ window: String(window), horizon: String(horizon), seed: String(seed), fold: String(fold), lead: String(lead) })}`),
   trainedWeights: (id: string) => request<Record<string, import('./WeightInspector').WeightSnapshot>>(`/api/v1/jobs/${encodeURIComponent(id)}/weights`),
-  previewWeights: (architecture: GraphSpec, window: number, horizon: number) => request<import('./WeightInspector').WeightSnapshot>('/api/v1/architectures/weights', { method: 'POST', body: JSON.stringify({ architecture, window, horizon }) }),
-  editGraph: (architecture: GraphSpec, edit: { action: string; id: string; kind: string; params: Record<string, unknown> }, cells: { window: number; horizon: number }[]) =>
-    request<{ spec: GraphSpec; warnings: string[] }>('/api/v1/architectures/edit', { method: 'POST', body: JSON.stringify({ architecture, edit, cells }) }),
-  describeGraph: (architecture: GraphSpec, window: number, horizon: number) =>
-    request<GraphDescription>('/api/v1/architectures/describe', { method: 'POST', body: JSON.stringify({ architecture, window, horizon }) }),
-  convert: (architecture: ArchitectureSpec | GraphSpec, window: number, horizon: number) =>
-    request<GraphSpec>('/api/v1/architectures/convert', { method: 'POST', body: JSON.stringify({ architecture, window, horizon }) }),
-  validateGraph: (architecture: GraphSpec, window: number, horizon: number) =>
-    request<GraphValidation>('/api/v1/architectures/validate', { method: 'POST', body: JSON.stringify({ architecture, window, horizon }) }),
+  previewWeights: (architecture: GraphSpec, window: number, horizon: number, data_path?: string) => request<import('./WeightInspector').WeightSnapshot>('/api/v1/architectures/weights', { method: 'POST', body: JSON.stringify({ architecture, window, horizon, ...(data_path ? { data_path } : {}) }) }),
+  editGraph: (architecture: GraphSpec, edit: { action: string; id: string; kind: string; params: Record<string, unknown> }, cells: { window: number; horizon: number }[], data_path?: string) =>
+    request<{ spec: GraphSpec; warnings: string[] }>('/api/v1/architectures/edit', { method: 'POST', body: JSON.stringify({ architecture, edit, cells, ...(data_path ? { data_path } : {}) }) }),
+  describeGraph: (architecture: GraphSpec, window: number, horizon: number, data_path?: string) =>
+    request<GraphDescription>('/api/v1/architectures/describe', { method: 'POST', body: JSON.stringify({ architecture, window, horizon, ...(data_path ? { data_path } : {}) }) }),
+  convert: (architecture: ArchitectureSpec | GraphSpec, window: number, horizon: number, data_path?: string) =>
+    request<GraphSpec>('/api/v1/architectures/convert', { method: 'POST', body: JSON.stringify({ architecture, window, horizon, ...(data_path ? { data_path } : {}) }) }),
+  validateGraph: (architecture: GraphSpec, window: number, horizon: number, data_path?: string) =>
+    request<GraphValidation>('/api/v1/architectures/validate', { method: 'POST', body: JSON.stringify({ architecture, window, horizon, ...(data_path ? { data_path } : {}) }) }),
+  downloadDataset: (dataset: string) =>
+    request<{ downloaded: unknown[]; datasets: import('./types').DatasetInfo[] }>('/api/v1/datasets/download', { method: 'POST', body: JSON.stringify({ dataset }) }),
   graphRecords: () => request<GraphRecord[]>('/api/v1/architectures'),
   saveGraph: (architecture: GraphSpec, view: GraphViewState, id?: string) =>
     request<GraphRecord>('/api/v1/architectures', { method: 'POST', body: JSON.stringify({ ...architecture, view, id }) }),

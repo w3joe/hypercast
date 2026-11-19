@@ -92,27 +92,9 @@ def checked(
     cells: list[dict[str, int]],
     *,
     allow_invalid: bool = False,
+    features: int = 4,
 ) -> tuple[dict[str, Any], list[str]]:
-    """Normalize ``spec`` and validate tensor shapes across all ``cells``.
-
-    Parameters
-    ----------
-    spec : dict[str, Any]
-        Candidate Schema v1 or Schema v2 specification.
-    cells : list[dict[str, int]]
-        List of ``{"window": W, "horizon": H}`` evaluation cells to verify.
-    allow_invalid : bool, default=False
-        When ``True``, collects shape/connectivity errors in ``notices`` so
-        incomplete drafts can be saved; schema/parameter errors still raise.
-
-    Returns
-    -------
-    normalized : dict[str, Any]
-        Canonicalized specification retaining optional ``view``, ``locked``, and
-        ``preset_id`` fields.
-    notices : list[str]
-        Validation warning strings when ``allow_invalid=True``.
-    """
+    """Normalize ``spec`` and validate tensor shapes across all ``cells``."""
     normalized = normalize_architecture_spec(spec)
     for key in ('view', 'locked', 'preset_id'):
         if key in spec:
@@ -120,7 +102,7 @@ def checked(
     notices = []
     for cell in cells:
         try:
-            validate_architecture(normalized, cell['window'], cell['horizon'])
+            validate_architecture(normalized, cell['window'], cell['horizon'], features)
         except (ValueError, RuntimeError, TypeError) as error:
             if not allow_invalid:
                 raise ValueError(f"{cell['window']}/{cell['horizon']}: {error}") from error
@@ -215,36 +197,19 @@ def validate_params(
 
 
 def describe_layers(
-    spec: dict[str, Any], cells: list[dict[str, int]]
+    spec: dict[str, Any], cells: list[dict[str, int]], *, features: int = 4
 ) -> list[dict[str, Any]]:
-    """Return enriched per-layer or per-node inspection records at ``cells[0]``.
-
-    Annotates hypercomplex nodes with component count, hypercomplex unit count,
-    expanded real output width, and ``shape_mode`` metadata, plus ``shared_calls``
-    when multiple Schema v2 nodes reference the same ``module_ref``.
-
-    Parameters
-    ----------
-    spec : dict[str, Any]
-        Schema v1 or Schema v2 architecture specification.
-    cells : list[dict[str, int]]
-        Non-empty list of ``{"window": W, "horizon": H}`` evaluation cells.
-
-    Returns
-    -------
-    list[dict[str, Any]]
-        Ordered list of layer/node descriptor dictionaries.
-    """
+    """Return enriched per-layer or per-node inspection records at ``cells[0]``."""
     cell = cells[0]
     if spec.get('schema_version') == 2:
-        info = describe_graph(spec, cell['window'], cell['horizon'])['graph_nodes']
+        info = describe_graph(spec, cell['window'], cell['horizon'], features)['graph_nodes']
         try:
-            info.update(validate_architecture(spec, cell['window'], cell['horizon'])['graph_nodes'])
+            info.update(validate_architecture(spec, cell['window'], cell['horizon'], features)['graph_nodes'])
         except (ValueError, RuntimeError):
             pass
         rows = [{**node, **info.get(node['id'], {}), 'params': node.get('params', {})} for node in spec['nodes']]
     else:
-        result = validate_architecture(spec, cell['window'], cell['horizon'])
+        result = validate_architecture(spec, cell['window'], cell['horizon'], features)
         rows = [{**node, **(result['trace'][index] if index < len(result['trace']) else {})}
                 for index, node in enumerate(spec['layers'])]
     for row in rows:
@@ -270,33 +235,10 @@ def dense_swap(
     target: str,
     algebra: str,
     cells: list[dict[str, int]],
+    *,
+    features: int = 4,
 ) -> dict[str, Any]:
-    """Swap a ``Dense``/``Linear`` and ``HyperDense`` layer while preserving real width.
-
-    Verifies across every cell in ``cells`` that both input and output widths
-    are divisible by the target algebra's component count ``d``, converts the
-    output width to ``width_out // d`` hypercomplex units (or ``width_out`` real
-    units when ``target == "dense"``), preserves bias and stage group, and
-    detaches the node from any shared ``module_ref`` weights.
-
-    Parameters
-    ----------
-    spec : dict[str, Any]
-        Schema v1 or Schema v2 architecture specification.
-    node_id : str
-        Identifier of the existing Dense, Linear, or HyperDense layer/node.
-    target : {"dense", "hyper_dense"}
-        Replacement layer kind.
-    algebra : str
-        Algebra name when ``target == "hyper_dense"``.
-    cells : list[dict[str, int]]
-        Evaluation cells over which width divisibility must hold.
-
-    Returns
-    -------
-    dict[str, Any]
-        Updated architecture specification validated across ``cells``.
-    """
+    """Swap a ``Dense``/``Linear`` and ``HyperDense`` layer while preserving real width."""
     next_spec = copy.deepcopy(spec)
     graph = spec.get('schema_version') == 2
     nodes = next_spec['nodes' if graph else 'layers']
@@ -306,7 +248,7 @@ def dense_swap(
     sizes = []
     for cell in cells:
         if graph:
-            info = validate_architecture(spec, cell['window'], cell['horizon'])['graph_nodes']
+            info = validate_architecture(spec, cell['window'], cell['horizon'], features)['graph_nodes']
             meta = info.get(node_id, {})
             if node['kind'] not in {'dense', 'hyper_dense'} and meta.get('label') not in {'Linear', 'HyperDense'}:
                 raise ValueError('Select a Dense or HyperDense layer')
@@ -322,7 +264,7 @@ def dense_swap(
             from .architecture import build_architecture
             from .layers import HyperDense
             from torch import nn
-            model = build_architecture(spec, cell['window'], cell['horizon'])
+            model = build_architecture(spec, cell['window'], cell['horizon'], features)
             layer = model.layers[next(i for i, n in enumerate(nodes) if n['id'] == node_id)]
             if not isinstance(layer, (nn.Linear, HyperDense)):
                 raise ValueError('Select a Dense or HyperDense layer')
@@ -347,7 +289,7 @@ def dense_swap(
     nodes[nodes.index(node)] = replacement
     if graph:
         next_spec['edges'] = [{**e, 'port': 'x'} if e['target'] == node_id else e for e in spec['edges']]
-    checked(next_spec, cells)
+    checked(next_spec, cells, features=features)
     return next_spec
 
 
@@ -362,37 +304,9 @@ def edit_layer(
     after: str | None = None,
     port: str | None = None,
     cells: list[dict[str, int]] | None = None,
+    features: int = 4,
 ) -> dict[str, Any]:
-    """Apply an immutable ``add``, ``insert``, ``set``, ``replace``, or ``remove`` edit.
-
-    Parameters
-    ----------
-    spec : dict[str, Any]
-        Editable (unlocked) Schema v1 or Schema v2 architecture specification.
-    action : {"add", "insert", "set", "replace", "remove"}
-        Editing operation to apply.
-    node_id : str or None, default=None
-        Target node/layer ID (for ``set``/``replace``/``remove``) or new unique
-        ID (for ``add``/``insert``).
-    kind : str or None, default=None
-        Operator type key for ``add``, ``insert``, or ``replace``.
-    params : dict[str, Any] or None, default=None
-        Parameter overrides or initial settings.
-    before : str or None, default=None
-        Anchor node/layer ID before which ``insert`` splices the new layer.
-    after : str or None, default=None
-        Anchor node/layer ID after which ``insert`` splices the new layer.
-    port : str or None, default=None
-        Specific input port on ``before`` when disambiguating multi-input graph
-        nodes during ``insert``.
-    cells : list[dict[str, int]] or None, default=None
-        Evaluation cells used to inspect source settings or validate Dense swaps.
-
-    Returns
-    -------
-    dict[str, Any]
-        Deep-copied specification reflecting the requested edit.
-    """
+    """Apply an immutable ``add``, ``insert``, ``set``, ``replace``, or ``remove`` edit."""
     if spec.get('locked'):
         raise ValueError('Locked model: create an editable preset copy first')
     result = copy.deepcopy(spec)
@@ -414,7 +328,7 @@ def edit_layer(
         return result
     if action == 'set':
         if graph and existing['kind'] == 'source':
-            meta = describe_graph(spec, cells[0]['window'], cells[0]['horizon'])['graph_nodes'][node_id]
+            meta = describe_graph(spec, cells[0]['window'], cells[0]['horizon'], features)['graph_nodes'][node_id]
             if set(params) - set(meta.get('settings', {})):
                 raise ValueError('Unsupported internal parameter; inspect layer settings first')
             for key, value in params.items():
@@ -447,7 +361,7 @@ def edit_layer(
     if action == 'replace' and kind in {'dense', 'hyper_dense'}:
         if set(params) - {'algebra'}:
             raise ValueError('Dense swaps preserve width; use layer set afterwards to change parameters')
-        return dense_swap(spec, node_id, kind, params.get('algebra', 'quaternion'), cells)
+        return dense_swap(spec, node_id, kind, params.get('algebra', 'quaternion'), cells, features=features)
     defaults = dict(layer_types()[kind]['defaults'])
     if graph and kind == 'hyper_dense':
         defaults['shape_mode'] = 'preserve'

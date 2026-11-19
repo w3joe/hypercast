@@ -152,6 +152,7 @@ def run_modal_job(job_dir: Path) -> None:
     if modal is None or app is None or execute_remote is None:
         raise RuntimeError("Modal support is not installed; install the 'modal' extra")
 
+    from .datasets import resolve_dataset_path
     from .playground_runner import _status, normalize_evaluation
 
     job_dir = job_dir.resolve()
@@ -162,7 +163,7 @@ def run_modal_job(job_dir: Path) -> None:
         raise ValueError("modal_runner requires a Modal execution target")
     gpu = str(execution["gpu"])
     evaluation = normalize_evaluation(request.get("evaluation"))
-    data_path = Path(evaluation["data_path"])
+    data_path = resolve_dataset_path(evaluation["data_path"])
     if not data_path.exists():
         raise FileNotFoundError(f"Dataset not found at {data_path}")
     dataset = data_path.read_bytes()

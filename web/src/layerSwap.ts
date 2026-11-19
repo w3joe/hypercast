@@ -52,7 +52,7 @@ export function prepareDenseSwap(
     throw new Error(`Unknown HyperDense algebra ${selectedAlgebra}.`)
   }
   const units = target === 'hyper_dense' ? Math.ceil(outputWidth / dimension) : outputWidth
-  if (outputWidth > 512) throw new Error('This width exceeds the supported replacement layer size.')
+  if (outputWidth > 4096) throw new Error('This width exceeds the supported replacement layer size.')
   const replacement: GraphNodeSpec = {
     id, kind: target, group: node.group, label: target === 'hyper_dense' ? 'HyperDense' : 'Dense',
     params: { units, bias: settings.bias ?? true, ...(target === 'hyper_dense' ? { algebra: selectedAlgebra, shape_mode: 'preserve' } : {}) },

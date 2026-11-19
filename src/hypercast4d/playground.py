@@ -30,6 +30,13 @@ from .architecture import (
     validate_architecture,
 )
 from .compute import modal_capability, normalize_execution
+from .datasets import (
+    DATASETS,
+    adapt_spec_features,
+    dataset_catalog,
+    dataset_feature_count,
+    download_dataset,
+)
 from .gcp_compute import gcp_capability
 from .method_collection import method_collection
 from .internal_graph import architecture_internal_graph
@@ -301,9 +308,16 @@ class JobManager:
         if normalized_execution["target"] in {"modal", "gcp"}:
             evaluation_payload["device"] = "cuda"
         normalized_evaluation = normalize_evaluation(evaluation_payload)
+        features = dataset_feature_count(
+            normalized_evaluation["data_path"], self.project_root
+        )
+        if not normalized_evaluation.get("initialization"):
+            spec = normalize_architecture_spec(adapt_spec_features(spec, features))
         if spec['schema_version'] == 2:
             for cell in normalized_evaluation['cells']:
-                validate_architecture(spec, cell['window'], cell['horizon'])
+                validate_architecture(
+                    spec, cell['window'], cell['horizon'], features=features
+                )
         candidate_hash = architecture_hash(
             spec,
             {**normalized_evaluation, "execution": normalized_execution},
@@ -462,16 +476,43 @@ def create_app(
         """Return ``{"ok": True}`` when the server is reachable."""
         return {"ok": True}
 
-    @app.get("/api/v1/catalog", tags=["Catalog"], summary="List layers, algebras, presets, and methods")
+    def _resolve_features(payload: dict[str, Any]) -> int:
+        fallback = int(payload.get("features", 4))
+        return dataset_feature_count(payload.get("data_path"), project_root, fallback=fallback)
+
+    def _adapted_spec(payload: dict[str, Any], features: int) -> dict[str, Any]:
+        raw_spec = payload["architecture"]
+        return adapt_spec_features(raw_spec, features) if payload.get("data_path") else raw_spec
+
+    @app.get("/api/v1/catalog", tags=["Catalog"], summary="List layers, algebras, datasets, presets, and methods")
     def catalog() -> dict[str, Any]:
-        """Return the complete layer catalog, 25 presets, 52-method index, and evaluation presets."""
+        """Return the complete layer catalog, 11 datasets, 25 presets, 52-method index, and evaluation presets."""
         return {
             **layer_catalog(),
+            "datasets": dataset_catalog(project_root),
             "presets": presets(),
             "method_collection": method_collection(),
             "evaluation_presets": EVALUATION_PRESETS,
             "evaluation_defaults": EVALUATION_DEFAULTS,
         }
+
+    @app.get("/api/v1/datasets", tags=["Catalog"], summary="List registered datasets and local availability")
+    def list_datasets() -> list[dict[str, Any]]:
+        """Return metadata, column names, and local download status for all registered datasets."""
+        return dataset_catalog(project_root)
+
+    @app.post("/api/v1/datasets/download", tags=["Catalog"], summary="Download one or all registered datasets")
+    def fetch_datasets(payload: dict[str, Any]) -> dict[str, Any]:
+        """Download and SHA-256-verify a registered dataset (or ``{"all": true}``) into ``data/``."""
+        try:
+            targets = list(DATASETS) if payload.get("all") else [str(payload["dataset"])]
+            downloaded = [
+                download_dataset(name, project_root, force=bool(payload.get("force", False)))
+                for name in targets
+            ]
+            return {"downloaded": downloaded, "datasets": dataset_catalog(project_root)}
+        except (KeyError, TypeError, ValueError, RuntimeError, OSError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
     @app.get("/api/v1/compute", tags=["Catalog"], summary="Inspect local, Modal, and GCP compute capabilities")
     def compute() -> dict[str, Any]:
@@ -488,7 +529,8 @@ def create_app(
         try:
             window = int(payload.get("window", 10))
             horizon = int(payload.get("horizon", 1))
-            return validate_architecture(payload["architecture"], window, horizon)
+            features = _resolve_features(payload)
+            return validate_architecture(_adapted_spec(payload, features), window, horizon, features=features)
         except (KeyError, TypeError, ValueError, ArchitectureError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -498,11 +540,13 @@ def create_app(
         from .model_editing import checked, edit_layer
         try:
             cells = normalize_evaluation({'cells': payload.get('cells', [{'window': 10, 'horizon': 1}])})['cells']
+            features = _resolve_features(payload)
             edit = payload['edit']
-            result = edit_layer(payload['architecture'], edit['action'], node_id=edit.get('id'),
+            result = edit_layer(_adapted_spec(payload, features), edit['action'], node_id=edit.get('id'),
                                 kind=edit.get('kind'), params=edit.get('params', {}),
-                                before=edit.get('before'), after=edit.get('after'), port=edit.get('port'), cells=cells)
-            result, warnings = checked(result, cells, allow_invalid=bool(payload.get('allow_invalid', False)))
+                                before=edit.get('before'), after=edit.get('after'), port=edit.get('port'),
+                                cells=cells, features=features)
+            result, warnings = checked(result, cells, allow_invalid=bool(payload.get('allow_invalid', False)), features=features)
             return {'spec': result, 'warnings': warnings}
         except (KeyError, TypeError, ValueError, RuntimeError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
@@ -511,8 +555,10 @@ def create_app(
     def internal_graph(payload: dict[str, Any]) -> dict[str, Any]:
         """Return an observed single-pass tensor dependency graph for a v1 TSLib block."""
         try:
-            return architecture_internal_graph(payload['architecture'], payload['layer_id'],
-                                               int(payload.get('window', 10)), int(payload.get('horizon', 1)))
+            features = _resolve_features(payload)
+            return architecture_internal_graph(_adapted_spec(payload, features), payload['layer_id'],
+                                               int(payload.get('window', 10)), int(payload.get('horizon', 1)),
+                                               features=features)
         except (KeyError, TypeError, ValueError, RuntimeError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -521,7 +567,8 @@ def create_app(
         """Lower a Schema v1 pipeline into an editable Schema v2 executable graph."""
         from .graph_architecture import convert_to_graph
         try:
-            return convert_to_graph(payload['architecture'], int(payload.get('window', 10)), int(payload.get('horizon', 1)))
+            features = _resolve_features(payload)
+            return convert_to_graph(_adapted_spec(payload, features), int(payload.get('window', 10)), int(payload.get('horizon', 1)), features=features)
         except (KeyError, TypeError, ValueError, RuntimeError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -530,7 +577,8 @@ def create_app(
         """Return static port contracts and settings for draft repair without shape validation."""
         from .graph_architecture import describe_graph
         try:
-            return describe_graph(payload['architecture'], int(payload.get('window', 10)), int(payload.get('horizon', 1)))
+            features = _resolve_features(payload)
+            return describe_graph(_adapted_spec(payload, features), int(payload.get('window', 10)), int(payload.get('horizon', 1)), features=features)
         except (KeyError, TypeError, ValueError, RuntimeError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -675,10 +723,11 @@ def create_app(
         from .architecture import build_architecture
         from .visualizations import model_weights
         try:
+            features = _resolve_features(payload)
             # Inspect a deterministic initialization without changing training RNG state.
             with torch.random.fork_rng(devices=[]):
                 torch.random.default_generator.manual_seed(0)
-                model = build_architecture(payload['architecture'], int(payload.get('window', 10)), int(payload.get('horizon', 1)))
+                model = build_architecture(_adapted_spec(payload, features), int(payload.get('window', 10)), int(payload.get('horizon', 1)), features=features)
                 return {'source': 'initialized', 'seed': 0, **model_weights(model)}
         except (KeyError, TypeError, ValueError, RuntimeError) as error:
             raise HTTPException(status_code=422, detail=str(error)) from error

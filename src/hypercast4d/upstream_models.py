@@ -9,6 +9,7 @@ that an arbitrary hybrid reproduces the published end-to-end model.
 from __future__ import annotations
 
 from importlib import import_module
+import math
 from types import SimpleNamespace
 from typing import Any
 
@@ -86,7 +87,13 @@ class UpstreamSequence(nn.Module):
         super().__init__()
         self.method, self.steps, self.width = method, steps, width
         self.padded_steps = max(32, ((steps + 31) // 32) * 32)
-        self.config = upstream_config(self.padded_steps, width, d_model, num_layers, n_heads, dropout)
+        effective_d_model = d_model
+        if method == "msgnet" and effective_d_model < width:
+            # MSGNet's GraphBlock Conv2d kernel is (d_model - c_out + 1, 1),
+            # requiring d_model >= width while staying divisible by 8 and n_heads.
+            step = math.lcm(8, max(1, n_heads))
+            effective_d_model = ((width + step - 1) // step) * step
+        self.config = upstream_config(self.padded_steps, width, effective_d_model, num_layers, n_heads, dropout)
         if method == "frets":
             self.config.channel_independence = "0"
         module = import_module(f"hypercast4d._vendor.tslib.models.{UPSTREAM_MODELS[method]}")

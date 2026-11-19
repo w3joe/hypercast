@@ -1,6 +1,12 @@
 # Data Preparation, Training & Diagnostics
 
-Reference for leakage-safe chronological data splitting, deterministic PyTorch model training, point-forecast diagnostics, supplement downloading, and the main/reproduction runners.
+Reference for benchmark dataset registries, leakage-safe chronological data splitting, deterministic PyTorch model training, point-forecast diagnostics, supplement downloading, and the main/reproduction runners.
+
+---
+
+## `hypercast4d.datasets`
+
+::: hypercast4d.datasets
 
 ---
 

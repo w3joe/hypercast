@@ -15,7 +15,8 @@ import torch
 from torch.utils.data import TensorDataset
 
 from .architecture import build_architecture, normalize_architecture_spec
-from .data import MinMaxStats, load_paper_data, prepare_windows
+from .data import MinMaxStats, load_dataset, load_paper_data, prepare_windows
+from .datasets import adapt_spec_features, find_dataset_by_path
 from .diagnostics import (
     DIAGNOSTIC_COLUMNS,
     append_predictions,
@@ -162,17 +163,21 @@ def normalize_evaluation(raw: dict[str, Any] | None) -> dict[str, Any]:
         if patience_raw is None
         else _integer(patience_raw, "early_stopping_patience", 1, 1000)
     )
-    target_column = str(
-        raw.get("target_column", EVALUATION_DEFAULTS["target_column"])
-    ).strip()
-    if not target_column or len(target_column) > 128:
-        raise ValueError("target_column is invalid")
     data_path = str(raw.get("data_path", EVALUATION_DEFAULTS["data_path"]))
     path = Path(data_path)
     if path.is_absolute() or ".." in path.parts:
         raise ValueError("data_path must be a relative path inside the project")
     if not data_path.startswith("data/"):
         raise ValueError("data_path must be inside data/")
+    known_dataset = find_dataset_by_path(data_path)
+    default_target = (
+        known_dataset.target_column
+        if known_dataset is not None
+        else EVALUATION_DEFAULTS["target_column"]
+    )
+    target_column = str(raw.get("target_column", default_target)).strip()
+    if not target_column or len(target_column) > 128:
+        raise ValueError("target_column is invalid")
     beta1 = float(raw.get("adam_beta1", EVALUATION_DEFAULTS["adam_beta1"]))
     beta2 = float(raw.get("adam_beta2", EVALUATION_DEFAULTS["adam_beta2"]))
     if not 0 <= beta1 < 1 or not 0 <= beta2 < 1:
@@ -424,9 +429,14 @@ def run_validation(job_dir: Path, request: dict[str, Any]) -> None:
 
 
 def _run_validation(job_dir: Path, request: dict[str, Any]) -> None:
-    architecture = normalize_architecture_spec(request["architecture"])
     evaluation = normalize_evaluation(request.get("evaluation"))
-    frame = load_paper_data(evaluation["data_path"], evaluation["target_column"])
+    frame = load_dataset(evaluation["data_path"], evaluation["target_column"])
+    features = int(frame.shape[1])
+    architecture = normalize_architecture_spec(
+        adapt_spec_features(request["architecture"], features)
+        if not evaluation.get("initialization")
+        else request["architecture"]
+    )
     device = resolve_device(evaluation["device"])
     if evaluation.get("numerical_preflight"):
         _atomic_json(job_dir / "preflight.json", numerical_preflight(device))
@@ -473,7 +483,7 @@ def _run_validation(job_dir: Path, request: dict[str, Any]) -> None:
                     flush=True,
                 )
                 seed_everything(seed)
-                model = build_architecture(architecture, window, horizon)
+                model = build_architecture(architecture, window, horizon, features=features)
                 init_report = initialize_for_evaluation(model, architecture, evaluation,
                     seed=seed, window=window, horizon=horizon, fold=fold_index)
                 if init_report:
@@ -620,13 +630,18 @@ def _final_datasets(
 
 def run_final_test(job_dir: Path, request: dict[str, Any]) -> None:
     """Refit on the first 85% of rows and evaluate the held-out final 15% test partition."""
-    architecture = normalize_architecture_spec(request["architecture"])
     evaluation = normalize_evaluation(request.get("evaluation"))
     if evaluation.get('initialization') == 'internal-matched-v1' or evaluation.get('nested_stopping'):
         raise ValueError('Internal study requires a separately frozen independent-data final protocol; historical tail is already seen')
     parent_dir = Path(request["parent_job_dir"])
     parent_runs = pd.read_csv(parent_dir / "runs.csv")
-    frame = load_paper_data(evaluation["data_path"], evaluation["target_column"])
+    frame = load_dataset(evaluation["data_path"], evaluation["target_column"])
+    features = int(frame.shape[1])
+    architecture = normalize_architecture_spec(
+        adapt_spec_features(request["architecture"], features)
+        if not evaluation.get("initialization")
+        else request["architecture"]
+    )
     device = resolve_device(evaluation["device"])
     total = len(evaluation["cells"]) * len(evaluation["seeds"])
     rows: list[dict[str, Any]] = []
@@ -661,7 +676,7 @@ def run_final_test(job_dir: Path, request: dict[str, Any]) -> None:
                 flush=True,
             )
             seed_everything(seed)
-            model = build_architecture(architecture, window, horizon)
+            model = build_architecture(architecture, window, horizon, features=features)
             initializations.append(initialize_for_evaluation(model, architecture, evaluation,
                 seed=seed, window=window, horizon=horizon, fold=0))
             _atomic_json(job_dir / "initialization.json", initializations)

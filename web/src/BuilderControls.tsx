@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, FlaskConical, Cloud, Play } from 'lucide-react'
 import { api } from './api'
-import type { ArchitectureSpec, GraphSpec, Catalog, EvaluationSpec, ExecutionSpec, Job, DemoLimits } from './types'
+import type { ArchitectureSpec, GraphSpec, Catalog, DatasetInfo, EvaluationSpec, ExecutionSpec, Job, DemoLimits } from './types'
 
 const dataColumns = ['Copper', 'FCX', 'CLP', 'SCCO']
 const batchSizes = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
@@ -39,6 +39,23 @@ export function ErrorNotice({ error }: { error: unknown }) {
   return <div className="error-notice" role="alert">{error instanceof Error ? error.message : String(error)}</div>
 }
 
+function DatasetDownloadPrompt({ dataset }: { dataset: DatasetInfo }) {
+  const queryClient = useQueryClient()
+  const downloadMutation = useMutation({
+    mutationFn: () => api.downloadDataset(dataset.id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['catalog'] }),
+  })
+  return (
+    <div className="dataset-download-note">
+      <p className="muted-copy">{dataset.label} is not downloaded locally yet.</p>
+      <button type="button" className="secondary-button" disabled={downloadMutation.isPending} onClick={() => downloadMutation.mutate()}>
+        {downloadMutation.isPending ? `Downloading ${dataset.label}…` : `Download ${dataset.label}`}
+      </button>
+      <ErrorNotice error={downloadMutation.error} />
+    </div>
+  )
+}
+
 export function EvaluationPanel({
   evaluation,
   catalog,
@@ -48,7 +65,17 @@ export function EvaluationPanel({
   catalog: Catalog
   onChange: (next: EvaluationSpec) => void
 }) {
-  const loadPreset = (preset: EvaluationSpec['preset']) => onChange(evaluationFromPreset(catalog, preset))
+  const loadPreset = (preset: EvaluationSpec['preset']) => onChange({
+    ...evaluationFromPreset(catalog, preset),
+    ...(evaluation.data_path ? { data_path: evaluation.data_path } : {}),
+    ...(evaluation.target_column ? { target_column: evaluation.target_column } : {}),
+  })
+  const datasets = catalog.datasets ?? []
+  const selectedDataset = datasets.find(d => d.data_path === evaluation.data_path)
+    ?? datasets.find(d => d.id === 'copper')
+  const targetOptions = selectedDataset
+    ? [selectedDataset.target_column, ...selectedDataset.columns.filter(c => c !== selectedDataset.target_column)]
+    : [...new Set([evaluation.target_column, ...dataColumns].filter(Boolean))]
   const batchSizeOptions = [...new Set([...batchSizes, evaluation.batch_size])].sort((a, b) => a - b)
   if (catalog.demo) return <section className="evaluation-panel panel-surface">
     <h4>Demo settings</h4><p className="demo-run-note">512 synthetic observations · one seed and split · early stopping · limited training.</p>
@@ -58,16 +85,25 @@ export function EvaluationPanel({
       <label>Epochs<input type="number" min={1} max={catalog.demo.epochs} value={evaluation.epochs} onChange={e => onChange({ ...evaluation, epochs: Number(e.target.value) })} /></label>
     </div><p className="demo-run-note">Up to {catalog.demo.parameters.toLocaleString()} parameters. Export your design for unrestricted training.</p>
   </section>
+  const datasetGroups = [...new Set(datasets.map(d => d.group))]
   return (
     <details className="evaluation-panel panel-surface">
-      <summary><FlaskConical size={16} />Evaluation settings<span>{evaluation.preset}</span></summary>
+      <summary><FlaskConical size={16} />Evaluation settings<span>{selectedDataset ? `${selectedDataset.label} · ${evaluation.preset}` : evaluation.preset}</span></summary>
       <div className="protocol-note">
         <Check size={15} />
         <span><strong>Main run protocol</strong> · chronological split · training-only scaling · Adam defaults from <code>configs/evaluation.yaml</code></span>
       </div>
       <div className="evaluation-grid">
+        {datasets.length > 0 && <label><span>Dataset</span><select aria-label="Dataset" value={selectedDataset?.data_path ?? evaluation.data_path} onChange={(event) => {
+          const nextDataset = datasets.find(d => d.data_path === event.target.value)
+          onChange({
+            ...evaluation,
+            data_path: event.target.value,
+            target_column: nextDataset && !nextDataset.columns.includes(evaluation.target_column) ? nextDataset.target_column : (nextDataset?.target_column ?? evaluation.target_column),
+          })
+        }}>{datasetGroups.map(group => <optgroup key={group} label={group}>{datasets.filter(d => d.group === group).map(d => <option key={d.id} value={d.data_path}>{d.label} · {d.features} ch · {d.frequency}{d.available ? '' : ' (download)'}</option>)}</optgroup>)}</select></label>}
         <label><span>Preset</span><select value={evaluation.preset} onChange={(event) => loadPreset(event.target.value as EvaluationSpec['preset'])}><option value="quick">Quick</option><option value="standard">Standard</option><option value="robust">Robust</option></select></label>
-        <label><span>Target</span><select value={evaluation.target_column} onChange={(event) => onChange({ ...evaluation, target_column: event.target.value })}>{dataColumns.map((column) => <option key={column}>{column}</option>)}</select></label>
+        <label><span>Target</span><select aria-label="Target" value={evaluation.target_column} onChange={(event) => onChange({ ...evaluation, target_column: event.target.value })}>{targetOptions.map((column) => <option key={column} value={column}>{column}</option>)}</select></label>
         <label><span>Cells (window/horizon)</span><input value={evaluation.cells.map((cell) => `${cell.window}/${cell.horizon}`).join(', ')} onChange={(event) => onChange({ ...evaluation, cells: cellList(event.target.value) })} /></label>
         <label><span>Seeds</span><input value={evaluation.seeds.join(', ')} onChange={(event) => onChange({ ...evaluation, seeds: numberList(event.target.value) })} /></label>
         <label><span>Epochs</span><input type="number" value={evaluation.epochs} onChange={(event) => onChange({ ...evaluation, epochs: Number(event.target.value) })} /></label>
@@ -79,6 +115,7 @@ export function EvaluationPanel({
         <label className="checkbox-row"><input type="checkbox" checked={evaluation.shuffle} onChange={(event) => onChange({ ...evaluation, shuffle: event.target.checked })} /><span>Shuffle training batches</span></label>
         <label className="checkbox-row"><input type="checkbox" checked={evaluation.restore_best_weights} disabled={evaluation.early_stopping_patience == null} onChange={(event) => onChange({ ...evaluation, restore_best_weights: event.target.checked })} /><span>Restore best weights</span></label>
       </div>
+      {!catalog.offline && selectedDataset && !selectedDataset.available && <DatasetDownloadPrompt dataset={selectedDataset} />}
     </details>
   )
 }

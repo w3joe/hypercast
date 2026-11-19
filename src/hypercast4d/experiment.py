@@ -20,7 +20,7 @@ import torch
 import yaml
 from torch.utils.tensorboard import SummaryWriter
 
-from .data import load_paper_data, prepare_windows
+from .data import load_dataset, load_paper_data, prepare_windows
 from .models import build_model, parameter_count
 from .diagnostics import (
     DIAGNOSTIC_COLUMNS,
@@ -258,7 +258,13 @@ def run(
         raise ValueError("At least one model must be enabled")
     if len(model_names) != len(set(model_names)):
         raise ValueError("Enabled model names must be unique")
-    frame = load_paper_data(data_config["path"], data_config.get("target_column"))
+    is_paper = Path(data_config["path"]).name == "paper_data.xlsx"
+    frame = (
+        load_paper_data(data_config["path"], data_config.get("target_column"))
+        if is_paper
+        else load_dataset(data_config["path"], data_config.get("target_column"))
+    )
+    features = int(frame.shape[1])
     output = Path(experiment_config["output_dir"])
     if quick:
         output = output.with_name(f"{output.name}_quick")
@@ -385,7 +391,7 @@ def run(
                     parameters = 0
                 else:
                     if name == "linear":
-                        model = build_model(name, window, horizon)
+                        model = build_model(name, window, horizon, features=features)
                     else:
                         settings_name = "hyper" if name.startswith("hyper_") else name
                         model_settings = dict(model_config[settings_name])
@@ -405,6 +411,7 @@ def run(
                             activation=str(model_settings["activation"]),
                             dropout=float(model_settings["dropout"]),
                             pool_size=int(model_settings["pool_size"]),
+                            features=features,
                         )
                     parameters = parameter_count(model)
 

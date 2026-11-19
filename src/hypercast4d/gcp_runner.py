@@ -13,6 +13,7 @@ import uuid
 import zipfile
 
 from .compute import normalize_execution
+from .datasets import resolve_dataset_path
 from .gcp_compute import gcp_config
 from .playground_runner import _status, normalize_evaluation
 
@@ -33,14 +34,15 @@ def package_job(job_dir: Path, destination: Path) -> None:
     request["evaluation"] = {**evaluation, "device": "cuda"}
     data = Path(evaluation["data_path"])
     root = Path.cwd().resolve()
-    if not data.resolve().is_relative_to(root / "data"):
+    resolved_data = resolve_dataset_path(data, root)
+    if not resolved_data.resolve().is_relative_to(root / "data"):
         raise ValueError("Dataset must resolve inside the project data directory")
     source = Path(__file__).parent
     with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
         for path in source.rglob("*"):
             if path.is_file() and path.suffix in {".py", ".json"} and "web_dist" not in path.parts:
                 archive.write(path, "src/hypercast4d/" + path.relative_to(source).as_posix())
-        archive.write(data, data.as_posix())
+        archive.write(resolved_data, data.as_posix())
         if request.get("phase") == "final_test":
             archive.write(Path(request["parent_job_dir"]) / "runs.csv", "parent/runs.csv")
             request["parent_job_dir"] = "/opt/hypercast-job/parent"

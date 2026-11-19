@@ -17,6 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from hypercast4d.architecture import layer_catalog, presets  # noqa: E402
+from hypercast4d.datasets import dataset_catalog  # noqa: E402
 from hypercast4d.graph_architecture import convert_to_graph, validate_graph  # noqa: E402
 from hypercast4d.method_collection import method_collection  # noqa: E402
 from hypercast4d.playground_runner import (  # noqa: E402
@@ -93,6 +94,7 @@ def build_manifest() -> dict[str, Any]:
 
     catalog = {
         **catalog_layers,
+        "datasets": dataset_catalog(check_disk=False),
         "presets": source_presets,
         "method_collection": method_collection(),
         "evaluation_presets": EVALUATION_PRESETS,

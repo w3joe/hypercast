@@ -117,32 +117,66 @@ class PreparedData:
     validation_end: int
 
 
-def load_paper_data(path: str | Path, target_column: str | None = None) -> pd.DataFrame:
-    """Read the supplementary workbook and return four numeric series.
+def load_dataset(
+    path: str | Path,
+    target_column: str | None = None,
+    *,
+    expected_features: int | None = None,
+) -> pd.DataFrame:
+    """Read a CSV, Excel, or Parquet time-series table and return numeric series.
 
-    The first usable sheet is selected. A date-like first column is retained as
-    the index when present. Missing observations are rejected rather than
-    silently imputed.
+    A date-like first column (or ``date`` column) is retained as a
+    ``DatetimeIndex`` when present. Missing observations are rejected rather
+    than silently imputed, and ``target_column`` is moved to column index ``0``
+    when specified.
+
+    Parameters
+    ----------
+    path : str or Path
+        Path to a ``.csv``, ``.xlsx``, ``.xls``, or ``.parquet`` dataset file.
+    target_column : str or None, default=None
+        Optional target column name to place first in the returned ``DataFrame``.
+    expected_features : int or None, default=None
+        If provided, enforces that the dataset contains exactly this many
+        numeric columns.
+
+    Returns
+    -------
+    pandas.DataFrame
+        ``float64`` numeric series ordered with ``target_column`` at index ``0``.
     """
-    path = Path(path)
-    if not path.exists():
+    from .datasets import resolve_dataset_path
+
+    resolved = resolve_dataset_path(path)
+    if not resolved.exists():
         raise FileNotFoundError(
-            f"Dataset not found at {path}. Run `hypercast4d-download` first."
+            f"Dataset not found at {path}. Run `hypercast4d-download --all` first."
         )
-    frame = pd.read_excel(path, sheet_name=0)
+    suffix = resolved.suffix.lower()
+    if suffix in {".xlsx", ".xls"}:
+        frame = pd.read_excel(resolved, sheet_name=0)
+    elif suffix == ".csv":
+        frame = pd.read_csv(resolved)
+    elif suffix == ".parquet":
+        frame = pd.read_parquet(resolved)
+    else:
+        raise ValueError(f"Unsupported dataset file format {resolved.suffix!r}")
     if frame.empty:
-        raise ValueError(f"No rows found in {path}")
+        raise ValueError(f"No rows found in {resolved}")
 
     first = frame.iloc[:, 0]
-    parsed = pd.to_datetime(first, errors="coerce")
-    if parsed.notna().mean() > 0.9:
-        frame = frame.iloc[:, 1:].copy()
-        frame.index = parsed
+    if not pd.api.types.is_numeric_dtype(first):
+        parsed = pd.to_datetime(first, format="mixed", errors="coerce")
+        if parsed.notna().mean() > 0.9:
+            frame = frame.iloc[:, 1:].copy()
+            frame.index = parsed
 
     numeric = frame.select_dtypes(include=[np.number]).copy()
-    if numeric.shape[1] != COMPONENT_COUNT:
+    if numeric.shape[1] < 1:
+        raise ValueError(f"No numeric series found in {resolved}")
+    if expected_features is not None and numeric.shape[1] != expected_features:
         raise ValueError(
-            f"Expected exactly {COMPONENT_COUNT} numeric series, "
+            f"Expected exactly {expected_features} numeric series, "
             f"found {numeric.shape[1]}: "
             f"{list(numeric.columns)}"
         )
@@ -152,7 +186,7 @@ def load_paper_data(path: str | Path, target_column: str | None = None) -> pd.Da
     if target_column is not None:
         if target_column not in numeric.columns:
             raise ValueError(
-                f"Target {target_column!r} is not in {list(numeric.columns)}"
+                f"Target {target_column!r} is not in {list(numeric.columns)[:20]}"
             )
         ordered = [
             target_column,
@@ -161,6 +195,16 @@ def load_paper_data(path: str | Path, target_column: str | None = None) -> pd.Da
         numeric = numeric.loc[:, ordered]
     numeric.columns = [str(column) for column in numeric.columns]
     return numeric.astype(np.float64)
+
+
+def load_paper_data(path: str | Path, target_column: str | None = None) -> pd.DataFrame:
+    """Read the supplementary workbook and return its four numeric series.
+
+    The first usable sheet is selected. A date-like first column is retained as
+    the index when present. Missing observations are rejected rather than
+    silently imputed.
+    """
+    return load_dataset(path, target_column, expected_features=COMPONENT_COUNT)
 
 
 def _empty(window: int, horizon: int, features: int) -> WindowSplit:

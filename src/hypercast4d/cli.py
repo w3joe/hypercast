@@ -22,6 +22,15 @@ import yaml
 
 from .architecture import presets, validate_architecture, architecture_hash
 from .compute import normalize_execution
+from .datasets import (
+    DATASETS,
+    adapt_spec_features,
+    dataset_catalog,
+    dataset_feature_count,
+    download_dataset,
+    get_dataset_spec,
+    resolve_dataset_path,
+)
 from .graph_architecture import convert_to_graph
 from .model_editing import load_model, write_model, checked, layer_types, describe_layers, edit_layer, connect_graph
 from .playground_runner import normalize_evaluation
@@ -76,28 +85,36 @@ def parser() -> argparse.ArgumentParser:
     groups = root.add_subparsers(dest='group', required=True)
     def group(name):
         return groups.add_parser(name).add_subparsers(dest='action', required=True)
-    def command(parent, name, file=False, cells=False):
+    def command(parent, name, file=False, cells=False, dataset=False):
         leaf = parent.add_parser(name)
         globals_for(leaf)
         if file:
             leaf.add_argument('file', type=Path)
         if cells:
             leaf.add_argument('--cells', default='10/1')
+        if dataset:
+            leaf.add_argument('--dataset', help='Registered dataset ID (e.g. etth2, weather, nyc_taxi)')
         return leaf
+    dataset_group = group('dataset')
+    command(dataset_group, 'list')
+    ds_download = command(dataset_group, 'download')
+    ds_download.add_argument('name', nargs='?')
+    ds_download.add_argument('--all', action='store_true')
+    ds_download.add_argument('--force', action='store_true')
     model = group('model')
     command(model, 'list')
-    create = command(model, 'create')
+    create = command(model, 'create', dataset=True)
     create.add_argument('preset'); create.add_argument('--out', type=Path, required=True); create.add_argument('--name')
     for action in ('inspect', 'validate', 'expand'):
-        leaf = command(model, action, file=True, cells=True)
+        leaf = command(model, action, file=True, cells=True, dataset=True)
         if action == 'expand':
             leaf.add_argument('--out', type=Path, required=True)
-    command(model, 'save', file=True, cells=True)
+    command(model, 'save', file=True, cells=True, dataset=True)
     export = command(model, 'export'); export.add_argument('id'); export.add_argument('--out', type=Path, required=True)
     layer = group('layer')
-    command(layer, 'types'); command(layer, 'list', file=True, cells=True)
+    command(layer, 'types'); command(layer, 'list', file=True, cells=True, dataset=True)
     for action in ('add', 'insert', 'set', 'replace', 'remove'):
-        leaf = command(layer, action, file=True, cells=True)
+        leaf = command(layer, action, file=True, cells=True, dataset=True)
         if action in ('set', 'replace', 'remove'):
             leaf.add_argument('id')
         else:
@@ -113,7 +130,7 @@ def parser() -> argparse.ArgumentParser:
             leaf.add_argument('--port')
     graph = group('graph')
     for action in ('connect', 'disconnect', 'output'):
-        leaf = command(graph, action, file=True, cells=True)
+        leaf = command(graph, action, file=True, cells=True, dataset=True)
         leaf.add_argument('--out', type=Path); leaf.add_argument('--allow-invalid', action='store_true')
         if action == 'output':
             leaf.add_argument('id')
@@ -122,7 +139,7 @@ def parser() -> argparse.ArgumentParser:
         if action == 'connect':
             leaf.add_argument('--source', required=True); leaf.add_argument('--replace', action='store_true')
     experiment = group('experiment')
-    run = command(experiment, 'run', file=True)
+    run = command(experiment, 'run', file=True, dataset=True)
     run.add_argument('--evaluation', type=Path)
     run.add_argument('--eval', action='append', default=[])
     for key in ('preset', 'cells', 'seeds', 'device'):
@@ -155,6 +172,10 @@ def evaluation_for(args: argparse.Namespace) -> dict[str, Any]:
     raw = yaml.safe_load(args.evaluation.read_text()) if args.evaluation else {}
     if not isinstance(raw, dict):
         raise ValueError('Evaluation file must contain an object')
+    if getattr(args, 'dataset', None):
+        ds = get_dataset_spec(args.dataset)
+        raw.setdefault('data_path', ds.data_path)
+        raw.setdefault('target_column', ds.target_column)
     raw.update(assignments(args.eval))
     supported = set(normalize_evaluation({})) | {'initialization', 'benchmark', 'numerical_preflight',
         'internal_preflight', 'remaining_preflight', 'remaining_tuning', 'remaining_replication', 'replacement', 'nested_stopping', 'early_stopping_relative_delta'}
@@ -219,7 +240,16 @@ def dispatch(args: argparse.Namespace) -> tuple[Any, int]:
     # Explicit file arguments retain shell-relative meaning; only dataset paths
     # and backend execution are rooted at --project-root.
     cells = parse_cells(args.cells) if getattr(args, 'cells', None) and args.group != 'experiment' else [{'window': 10, 'horizon': 1}]
+    selected_ds = get_dataset_spec(args.dataset) if getattr(args, 'dataset', None) else None
+    cli_features = selected_ds.features if selected_ds else 4
     backend = lambda: ensure_backend(project, results)
+    if args.group == 'dataset':
+        if args.action == 'list':
+            return dataset_catalog(project), 0
+        if not args.all and not args.name:
+            raise ValueError('Specify a dataset ID or --all')
+        targets = list(DATASETS) if args.all else [args.name]
+        return [download_dataset(t, project, force=args.force) for t in targets], 0
     if args.group == 'server':
         found = ensure_backend(project, results, args.port) if args.action == 'start' else discover(project, results)
         if args.action == 'stop' and found:
@@ -235,7 +265,9 @@ def dispatch(args: argparse.Namespace) -> tuple[Any, int]:
             spec.pop('preset_id', None); spec['locked'] = False
             if args.name:
                 spec['name'] = args.name
-            spec, _ = checked(spec, cells)
+            if selected_ds:
+                spec = adapt_spec_features(spec, cli_features)
+            spec, _ = checked(spec, cells, features=cli_features)
             write_model(args.out, spec)
             return {'file': str(args.out), 'name': spec['name']}, 0
         if args.action == 'export':
@@ -243,27 +275,31 @@ def dispatch(args: argparse.Namespace) -> tuple[Any, int]:
             write_model(args.out, record)
             return {'file': str(args.out)}, 0
         spec = load_model(args.file)
+        if selected_ds:
+            spec = adapt_spec_features(spec, cli_features)
         if args.action == 'inspect':
-            return {'name': spec['name'], 'schema_version': spec.get('schema_version', 1), 'layers': describe_layers(spec, cells)}, 0
+            return {'name': spec['name'], 'schema_version': spec.get('schema_version', 1), 'layers': describe_layers(spec, cells, features=cli_features)}, 0
         if args.action == 'expand':
-            expanded = convert_to_graph(spec, cells[0]['window'], cells[0]['horizon'])
+            expanded = convert_to_graph(spec, cells[0]['window'], cells[0]['horizon'], features=cli_features)
             for key in ('locked', 'view'):
                 if key in spec:
                     expanded[key] = spec[key]
-            checked(expanded, cells)
+            checked(expanded, cells, features=cli_features)
             write_model(args.out, expanded)
             return {'file': str(args.out), 'nodes': len(expanded['nodes'])}, 0
-        spec, _ = checked(spec, cells)
+        spec, _ = checked(spec, cells, features=cli_features)
         if args.action == 'save':
             return request(backend()['url'], '/api/v1/architectures', spec), 0
-        return {'valid': True, 'cells': [validate_architecture(spec, c['window'], c['horizon']) for c in cells]}, 0
+        return {'valid': True, 'cells': [validate_architecture(spec, c['window'], c['horizon'], features=cli_features) for c in cells]}, 0
     if args.group in ('layer', 'graph'):
         if args.action == 'types':
             from .algebras import ALGEBRAS
             return {'types': list(layer_types().values()), 'algebras': {key: value.component_count for key, value in ALGEBRAS.items()}, 'hyperdense_units': 'Manual output width = units × algebra components; graph shape_mode=preserve infers units, pads and crops to preserve the input width'}, 0
         spec = load_model(args.file)
+        if selected_ds:
+            spec = adapt_spec_features(spec, cli_features)
         if args.action == 'list':
-            return describe_layers(spec, cells), 0
+            return describe_layers(spec, cells, features=cli_features), 0
         if spec.get('locked'):
             raise ValueError('Locked model: create an editable preset copy first')
         sharing_warning = None
@@ -274,7 +310,8 @@ def dispatch(args: argparse.Namespace) -> tuple[Any, int]:
         if args.group == 'layer':
             spec = edit_layer(spec, args.action, node_id=args.id, kind=getattr(args, 'kind', None),
                               params=assignments(args.set), before=getattr(args, 'before', None),
-                              after=getattr(args, 'after', None), port=getattr(args, 'port', None), cells=cells)
+                              after=getattr(args, 'after', None), port=getattr(args, 'port', None),
+                              cells=cells, features=cli_features)
         else:
             if spec.get('schema_version') != 2:
                 raise ValueError('Use model expand before graph editing')
@@ -289,13 +326,13 @@ def dispatch(args: argparse.Namespace) -> tuple[Any, int]:
                 if args.id not in {n['id'] for n in spec['nodes']}:
                     raise ValueError('Unknown graph output node')
                 spec['output'] = args.id
-        spec, notices = checked(spec, cells, allow_invalid=args.allow_invalid)
+        spec, notices = checked(spec, cells, allow_invalid=args.allow_invalid, features=cli_features)
         if sharing_warning:
             notices.append(sharing_warning)
         destination = args.out or args.file
         write_model(destination, spec, overwrite=destination.resolve() == args.file.resolve())
         return {'file': str(destination), 'warnings': notices,
-                'layers': describe_layers(spec, cells) if not notices else []}, 0
+                'layers': describe_layers(spec, cells, features=cli_features) if not notices else []}, 0
     if args.group == 'experiment':
         if args.action == 'run':
             evaluation = evaluation_for(args)
@@ -307,15 +344,19 @@ def dispatch(args: argparse.Namespace) -> tuple[Any, int]:
             if args.gpu_count is not None:
                 raw['gpu_count'] = args.gpu_count
             execution = normalize_execution(raw)
-            spec, _ = checked(load_model(args.file), evaluation['cells'])
-            dataset = (project / evaluation['data_path']).resolve()
+            dataset = resolve_dataset_path(evaluation['data_path'], project).resolve()
             if not dataset.is_relative_to(project / 'data') or not dataset.is_file():
                 raise ValueError('Dataset must exist inside the selected project data directory')
+            run_features = dataset_feature_count(evaluation['data_path'], project)
+            loaded_spec = load_model(args.file)
+            if not evaluation.get('initialization'):
+                loaded_spec = adapt_spec_features(loaded_spec, run_features)
+            spec, _ = checked(loaded_spec, evaluation['cells'], features=run_features)
             if args.dry_run:
                 return {'dry_run': True, 'execution': execution, 'evaluation': evaluation,
                         'candidate_hash': architecture_hash(spec, {**evaluation, 'execution': execution}),
                         'trials': len(evaluation['cells']) * len(evaluation['seeds']) * len(evaluation['folds']) * (8 if evaluation.get('remaining_replication') else 16 if evaluation.get('remaining_tuning') else 1),
-                        'cells': [validate_architecture(spec, c['window'], c['horizon']) for c in evaluation['cells']]}, 0
+                        'cells': [validate_architecture(spec, c['window'], c['horizon'], features=run_features) for c in evaluation['cells']]}, 0
             confirmation(args, execution)
             url = backend()['url']
             record = request(url, '/api/v1/architectures', spec)

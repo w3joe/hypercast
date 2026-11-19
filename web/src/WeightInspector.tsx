@@ -18,10 +18,10 @@ function Matrix({ values, bound, title, rowIndices, columnIndices, blockRows, bl
   </svg>
 }
 
-export default function WeightInspector({ graph, nodeId, jobs = [], window, horizon, onClose, active = true }: { graph?: GraphSpec; nodeId?: string; jobs?: Job[]; window: number; horizon: number; onClose?: () => void; active?: boolean }) {
+export default function WeightInspector({ graph, nodeId, jobs = [], window, horizon, dataPath, onClose, active = true }: { graph?: GraphSpec; nodeId?: string; jobs?: Job[]; window: number; horizon: number; dataPath?: string; onClose?: () => void; active?: boolean }) {
   const [jobId, setJobId] = useState(''), [trialKey, setTrialKey] = useState(''), [layerName, setLayerName] = useState('')
   const job = jobs.find(j => j.id === jobId) ?? jobs[0]
-  const preview = useQuery({ queryKey: ['weight-preview', graph, window, horizon], queryFn: () => api.previewWeights(graph!, window, horizon), enabled: Boolean(graph) && active, retry: false, staleTime: Infinity })
+  const preview = useQuery({ queryKey: ['weight-preview', graph, window, horizon, dataPath], queryFn: () => api.previewWeights(graph!, window, horizon, dataPath), enabled: Boolean(graph) && active, retry: false, staleTime: Infinity })
   const trained = useQuery({ queryKey: ['trained-weights', job?.id], queryFn: () => api.trainedWeights(job!.id), enabled: !graph && Boolean(job) && active, retry: false, staleTime: Infinity })
   const trials = Object.entries(trained.data ?? {}).filter(([, s]) => s.window === window && s.horizon === horizon)
   const trial = trials.find(([key]) => key === trialKey) ?? trials[0]

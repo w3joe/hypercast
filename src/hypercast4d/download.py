@@ -111,15 +111,56 @@ def download(
 
 def main() -> None:
     """CLI entry point for ``hypercast4d-download``."""
+    from .datasets import DATASETS, NYC_TLC_PARQUET_SHA256, dataset_catalog, download_dataset
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", type=Path, default=Path("data/raw"))
+    parser.add_argument(
+        "--dataset",
+        action="append",
+        default=[],
+        help="Registered dataset ID to download (repeatable; see --list)",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Download Copper, all 9 TSLib benchmarks, and NYC Taxi Trip Records",
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List all registered datasets and local availability",
+    )
+    parser.add_argument(
+        "--nyc-taxi-months",
+        default=",".join(NYC_TLC_PARQUET_SHA256),
+        help="Comma-separated YYYY-MM months for nyc_taxi aggregation",
+    )
     parser.add_argument("--force", action="store_true")
     parser.add_argument(
         "--allow-updated-source",
         action="store_true",
-        help="Accept a publisher archive whose checksum differs from the pinned copy",
+        help="Accept an upstream archive whose checksum differs from the pinned copy",
     )
     args = parser.parse_args()
+    if args.list:
+        print(json.dumps(dataset_catalog(Path.cwd()), indent=2))
+        return
+    if args.all or args.dataset:
+        targets = list(DATASETS) if args.all else args.dataset
+        months = tuple(m.strip() for m in args.nyc_taxi_months.split(",") if m.strip())
+        results = [
+            download_dataset(
+                name,
+                Path.cwd(),
+                force=args.force,
+                allow_updated_source=args.allow_updated_source,
+                nyc_taxi_months=months,
+            )
+            for name in targets
+        ]
+        print(json.dumps(results if len(results) > 1 else results[0], indent=2))
+        return
     checksums = download(args.destination, args.force, args.allow_updated_source)
     print(json.dumps(checksums, indent=2))
 

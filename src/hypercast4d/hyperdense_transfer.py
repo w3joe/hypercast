@@ -18,10 +18,16 @@ DIMENSIONS={'complex':2,'quaternion':4,'octonion':8}
 def ieee_precision():
     """Force IEEE FP32 precision on cuDNN conv and CUDA matmul backends."""
     conv,matmul=torch.backends.cudnn.conv,torch.backends.cuda.matmul
-    before=(conv.fp32_precision,matmul.fp32_precision)
-    conv.fp32_precision=matmul.fp32_precision='ieee'
-    try:yield
-    finally:conv.fp32_precision,matmul.fp32_precision=before
+    if hasattr(conv,'fp32_precision') and hasattr(matmul,'fp32_precision'):
+        before=(conv.fp32_precision,matmul.fp32_precision)
+        conv.fp32_precision=matmul.fp32_precision='ieee'
+        try:yield
+        finally:conv.fp32_precision,matmul.fp32_precision=before
+    else:
+        before=(torch.backends.cudnn.allow_tf32,torch.backends.cuda.matmul.allow_tf32)
+        torch.backends.cudnn.allow_tf32=False;torch.backends.cuda.matmul.allow_tf32=False
+        try:yield
+        finally:torch.backends.cudnn.allow_tf32,torch.backends.cuda.matmul.allow_tf32=before
 
 
 def stream_seed(seed,backbone,role):

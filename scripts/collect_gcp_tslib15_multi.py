@@ -31,6 +31,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-dir", type=Path, required=True)
     parser.add_argument("--download", action="store_true", help="Sync completed trials from GCS and build per-dataset summaries")
+    parser.add_argument("--include-predictions", action="store_true", help="Also download predictions.npz files (default skips them for fast result.json sync)")
     args = parser.parse_args()
 
     run_dir = args.run_dir.resolve()
@@ -60,7 +61,11 @@ def main() -> None:
     trials_dir = run_dir / "trials"
     trials_dir.mkdir(parents=True, exist_ok=True)
     print(f"Syncing {prefix}/trials -> {trials_dir} ...")
-    _gcloud(account, "storage", "rsync", "--recursive", f"{prefix}/trials", str(trials_dir), check=True, timeout=600)
+    rsync_args = ["storage", "rsync", "--recursive"]
+    if not args.include_predictions:
+        rsync_args.append(r"--exclude=.*predictions\.npz$")
+    rsync_args.extend([f"{prefix}/trials", str(trials_dir)])
+    _gcloud(account, *rsync_args, check=True, timeout=900)
 
     by_dataset: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for res_file in sorted(trials_dir.rglob("result.json")):

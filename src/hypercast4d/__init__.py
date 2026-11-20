@@ -81,6 +81,15 @@ from .graph_architecture import (
     describe_graph,
 )
 from .layers import HyperDense, ShapePreservingHyperDense
+from .multilayer_hyperdense import (
+    BlockDiagonalLinear,
+    HyperChannelBlock,
+    HyperChannelMixer,
+    HyperGate,
+    HyperRMSNorm,
+    LowRankLinear,
+    build_multilayer_model,
+)
 from .training import (
     FitResult,
     error_metrics,
@@ -93,12 +102,18 @@ __all__ = [
     "ALGEBRAS",
     "Algebra",
     "ArchitectureError",
+    "BlockDiagonalLinear",
     "COMPONENT_COUNT",
     "DATASETS",
     "DatasetSpec",
     "FitResult",
     "GraphForecaster",
+    "HyperChannelBlock",
+    "HyperChannelMixer",
     "HyperDense",
+    "HyperGate",
+    "HyperRMSNorm",
+    "LowRankLinear",
     "MinMaxStats",
     "PAPER_COMPONENT_COUNT",
     "PreparedData",
@@ -106,6 +121,7 @@ __all__ = [
     "WindowSplit",
     "architecture_hash",
     "build_architecture",
+    "build_multilayer_model",
     "convert_to_graph",
     "dataset_catalog",
     "describe_graph",

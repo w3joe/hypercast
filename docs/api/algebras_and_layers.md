@@ -16,6 +16,12 @@ Reference for HyperCAST's finite-dimensional real algebras, PyTorch hypercomplex
 
 ---
 
+## `hypercast4d.multilayer_hyperdense`
+
+::: hypercast4d.multilayer_hyperdense
+
+---
+
 ## `hypercast4d.visualizations`
 
 ::: hypercast4d.visualizations

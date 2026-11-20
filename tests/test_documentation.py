@@ -55,6 +55,7 @@ def test_all_public_modules_classes_and_functions_have_docstrings() -> None:
         "hypercast4d",
         "hypercast4d.algebras",
         "hypercast4d.layers",
+        "hypercast4d.multilayer_hyperdense",
         "hypercast4d.architecture",
         "hypercast4d.graph_architecture",
         "hypercast4d.data",

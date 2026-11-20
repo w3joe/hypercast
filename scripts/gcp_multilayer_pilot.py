@@ -58,6 +58,25 @@ FALLBACK_ZONES: tuple[str, ...] = (
 )
 
 PILOT_DATASETS = ("ili", "etth2", "weather", "electricity")
+FULL10_DATASETS = (
+    "ili",
+    "nyc_taxi",
+    "exchange",
+    "etth1",
+    "etth2",
+    "ettm1",
+    "ettm2",
+    "weather",
+    "electricity",
+    "traffic",
+)
+FULL10_SPECS: tuple[tuple[str, str, int, int], ...] = (
+    ("tsmixer_cc", "compress", 64, 3),
+    ("hyper_channel_mixer", "compress", 64, 3),
+    ("hyper_channel_mixer", "isoparam", 64, 3),
+    ("itransformer_cc", "compress", 64, 3),
+    ("crossformer_cc", "compress", 32, 2),
+)
 PILOT_MODELS = ("hyper_channel_mixer", "tsmixer_cc", "itransformer_cc", "crossformer_cc")
 PILOT_ARMS = (
     "real",
@@ -142,14 +161,37 @@ $PY /opt/hypercast-pilot/scripts/gcp_multilayer_pilot.py worker \\
 
 
 def cmd_launch(args: argparse.Namespace) -> None:
-    """Package development-only dataset bundles and launch GCE GPU VM(s)."""
+    """Package dataset bundles and launch GCE GPU VM(s) for pilot or full 10-dataset runs."""
     from hypercast4d.tslib15_multi import prepare_dataset_bundle
 
-    datasets = [d.strip() for d in args.datasets.split(",") if d.strip()]
-    models = [m.strip() for m in args.models.split(",") if m.strip()]
+    if args.preset == "full10":
+        datasets = list(FULL10_DATASETS)
+        model_specs = list(FULL10_SPECS)
+        include_test = True
+        eval_split = "test"
+        epochs = args.epochs if args.epochs != 60 else 100
+        patience = args.patience if args.patience != 15 else 20
+        seeds = (
+            [int(s.strip()) for s in args.seeds.split(",") if s.strip()]
+            if args.seeds != ",".join(str(s) for s in PILOT_SEEDS)
+            else [3301, 3302, 3303]
+        )
+    else:
+        datasets = [d.strip() for d in args.datasets.split(",") if d.strip()]
+        models = [m.strip() for m in args.models.split(",") if m.strip()]
+        budget_modes = [b.strip() for b in args.budget_modes.split(",") if b.strip()]
+        model_specs = [
+            (mdl, bmode, args.base_width, args.num_layers)
+            for mdl in models
+            for bmode in budget_modes
+        ]
+        include_test = bool(args.include_test)
+        eval_split = "test" if include_test else "development"
+        epochs = args.epochs
+        patience = args.patience
+        seeds = [int(s.strip()) for s in args.seeds.split(",") if s.strip()]
+
     arms = [a.strip() for a in args.arms.split(",") if a.strip()]
-    budget_modes = [b.strip() for b in args.budget_modes.split(",") if b.strip()]
-    seeds = [int(s.strip()) for s in args.seeds.split(",") if s.strip()]
     max_rows = args.max_rows if args.max_rows > 0 else None
 
     run_dir = ROOT / "results" / args.run_id
@@ -157,8 +199,9 @@ def cmd_launch(args: argparse.Namespace) -> None:
     gcs_prefix = f"gs://{args.bucket}/hypercast4d/{args.run_id}"
 
     print(
-        f"Preparing Phase 2 development pilot {args.run_id} "
-        f"(include_test=False, {args.vm_count}x {args.machine_type})...",
+        f"Preparing multi-layer run {args.run_id} "
+        f"(preset={args.preset}, include_test={include_test}, eval_split={eval_split}, "
+        f"epochs={epochs}, patience={patience}, {args.vm_count}x {args.machine_type})...",
         flush=True,
     )
     jobs: list[dict[str, Any]] = []
@@ -170,9 +213,8 @@ def cmd_launch(args: argparse.Namespace) -> None:
         bundles_dir.mkdir(parents=True)
 
         for ds_id in datasets:
-            # Strictly exclude held-out test rows from Phase 2 pilot bundles!
             blob, manifest = prepare_dataset_bundle(
-                ds_id, ROOT, include_test=False, max_rows=max_rows
+                ds_id, ROOT, include_test=include_test, max_rows=max_rows
             )
             manifests[ds_id] = manifest
             (bundles_dir / f"{ds_id}.npz").write_bytes(blob)
@@ -181,40 +223,39 @@ def cmd_launch(args: argparse.Namespace) -> None:
             )
             print(
                 f"  bundle {ds_id:12s}: rows={manifest['rows']:5d} ch={manifest['features']:3d} "
-                f"dev_origins={manifest['partitions']['development']['origins']:4d} "
+                f"{eval_split}_origins={manifest['partitions'][eval_split]['origins']:4d} "
                 f"include_test={manifest['include_test']} ({len(blob)/1e6:.2f}MB)",
                 flush=True,
             )
 
         idx = 0
         for ds_id in datasets:
-            for mdl in models:
-                for bmode in budget_modes:
-                    for arm in arms:
-                        # Skip duplicate 'real' in isoparam mode? Keep explicit for self-contained cells.
-                        for seed in seeds:
-                            jobs.append(
-                                {
-                                    "index": idx,
-                                    "shard": idx % args.vm_count,
-                                    "dataset": ds_id,
-                                    "model_name": mdl,
-                                    "budget_mode": bmode,
-                                    "arm": arm,
-                                    "seed": seed,
-                                    "base_width": args.base_width,
-                                    "num_layers": args.num_layers,
-                                    "epochs": args.epochs,
-                                    "patience": args.patience,
-                                    "learning_rate": 1e-3,
-                                    "eval_split": "development",
-                                    "timeout_seconds": 1800,
-                                }
-                            )
-                            idx += 1
+            for mdl, bmode, bw, nl in model_specs:
+                for arm in arms:
+                    for seed in seeds:
+                        jobs.append(
+                            {
+                                "index": idx,
+                                "shard": idx % args.vm_count,
+                                "dataset": ds_id,
+                                "model_name": mdl,
+                                "budget_mode": bmode,
+                                "arm": arm,
+                                "seed": seed,
+                                "base_width": bw,
+                                "num_layers": nl,
+                                "epochs": epochs,
+                                "patience": patience,
+                                "learning_rate": 1e-3,
+                                "eval_split": eval_split,
+                                "timeout_seconds": 2400,
+                            }
+                        )
+                        idx += 1
 
         plan = {
             "run_id": args.run_id,
+            "preset": args.preset,
             "created_utc": _utc_now(),
             "gcs_prefix": gcs_prefix,
             "project": args.project,
@@ -222,12 +263,16 @@ def cmd_launch(args: argparse.Namespace) -> None:
             "machine_type": args.machine_type,
             "vm_count": args.vm_count,
             "gpus_per_vm": args.gpus_per_vm,
-            "include_test": False,
-            "eval_split": "development",
+            "include_test": include_test,
+            "eval_split": eval_split,
+            "epochs": epochs,
+            "patience": patience,
             "datasets": datasets,
-            "models": models,
+            "model_specs": [
+                {"model_name": m, "budget_mode": bm, "base_width": bw, "num_layers": nl}
+                for m, bm, bw, nl in model_specs
+            ],
             "arms": arms,
-            "budget_modes": budget_modes,
             "seeds": seeds,
             "total_jobs": len(jobs),
             "manifests": manifests,
@@ -564,6 +609,8 @@ def main() -> None:
     p_launch.add_argument("--account", default="onflowai.general@gmail.com")
     p_launch.add_argument("--project", default="onflow-30k")
     p_launch.add_argument("--bucket", default="onflow-30k-media")
+    p_launch.add_argument("--preset", choices=("pilot", "full10"), default="pilot")
+    p_launch.add_argument("--include-test", action="store_true")
     p_launch.add_argument("--datasets", default=",".join(PILOT_DATASETS))
     p_launch.add_argument("--models", default=",".join(PILOT_MODELS))
     p_launch.add_argument("--arms", default=",".join(PILOT_ARMS))

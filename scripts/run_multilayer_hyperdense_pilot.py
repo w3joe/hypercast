@@ -50,6 +50,7 @@ PILOT_HD_ARMS: tuple[str, ...] = (
     "split_complex",
     "quaternion",
     "coquaternion",
+    "cl11",
     "octonion",
 )
 PILOT_LR_ARMS: tuple[str, ...] = ("lowrank2", "lowrank4", "lowrank8")
@@ -109,6 +110,19 @@ def run_single_fit(
 
     t0 = time.monotonic()
     dev = torch.device(device)
+    if dev.type == "cuda":
+        torch.cuda.reset_peak_memory_stats(dev)
+    history: list[dict[str, float | int]] = []
+
+    def _epoch_cb(epoch: int, train_loss: float, val_loss: float) -> None:
+        history.append(
+            {
+                "epoch": int(epoch),
+                "train_mae": float(train_loss),
+                "inner_mae": float(val_loss),
+            }
+        )
+
     with ieee_precision():
         fit = fit_model(
             model,
@@ -129,9 +143,11 @@ def run_single_fit(
             early_stopping_relative_delta=0.0,
             restore_best_weights=True,
             device=dev,
+            epoch_callback=_epoch_cb,
         )
         preds_scaled = predict(model, eval_ds, dev, batch_size=64)
     elapsed = time.monotonic() - t0
+    peak_gpu_bytes = int(torch.cuda.max_memory_allocated(dev)) if dev.type == "cuda" else 0
 
     span = float(manifest["scaler_span"][0])
     minimum = float(manifest["scaler_minimum"][0])
@@ -150,23 +166,36 @@ def run_single_fit(
         "arm": arm,
         "budget_mode": budget_mode,
         "seed": seed,
+        "base_width": int(base_width),
+        "num_layers": int(num_layers),
         "inner_val_mae_scaled": float(fit.best_validation_loss),
         "mae": float(np.abs(err).mean()),
+        "mse": float(np.square(err).mean()),
         "rmse": float(np.sqrt(np.square(err).mean())),
+        "bias": float(err.mean()),
+        "per_lead_mae": np.abs(err).mean(axis=0).tolist(),
+        "per_lead_mse": np.square(err).mean(axis=0).tolist(),
+        "per_lead_bias": err.mean(axis=0).tolist(),
         "persistence_mae": float(np.abs(persistence - actual).mean()),
         "epochs_ran": int(fit.epochs_ran),
         "best_epoch": int(fit.best_epoch),
         "train_seconds": round(elapsed, 2),
+        "peak_gpu_bytes": peak_gpu_bytes,
         "parameters": int(report["parameters"]),
         "selected_parameters": int(report["selected_parameters"]),
         "selected_parameter_share": float(report["selected_parameter_share"]),
         "replaced_site_count": int(report["replaced_site_count"]),
+        "history": history,
     }
 
 
 def summarize_pilot(records: list[dict[str, Any]], out_dir: Path) -> None:
-    """Aggregate pilot runs and evaluate leakage-free Phase 2 advancement gates."""
-    df = pd.DataFrame(records)
+    """Aggregate pilot runs and evaluate leakage-free advancement gates."""
+    flat_records = [
+        {k: v for k, v in r.items() if k not in {"history", "per_lead_mae", "per_lead_mse", "per_lead_bias"}}
+        for r in records
+    ]
+    df = pd.DataFrame(flat_records)
     df.to_csv(out_dir / "raw-fits.csv", index=False)
 
     cfg = df.groupby(["dataset", "model_name", "budget_mode", "arm"], as_index=False).agg(

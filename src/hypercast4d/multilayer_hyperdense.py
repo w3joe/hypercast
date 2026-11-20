@@ -42,7 +42,6 @@ from typing import Any
 
 import torch
 from torch import nn
-from torch.nn import functional as F
 
 from .algebras import ALGEBRAS, get_algebra
 from .remaining_controls import ChannelMap, ContiguousHyperDense
@@ -116,17 +115,21 @@ def digest_except_many(module: nn.Module, excluded_prefixes: set[str]) -> str:
 
 
 class HyperRMSNorm(nn.Module):
-    r"""Joint root-mean-square normalization across the $d$ components of each unit.
+    r"""Phase-preserving RMS normalization over all $d \cdot M$ latent coordinates.
 
     Given an input of shape ``(*, d * num_units)`` in component-major layout,
-    reshapes to ``(*, d, num_units)`` and normalizes each hypercomplex unit across
-    its $d$ basis coordinates by a single shared scalar:
+    reshapes to ``(*, d, num_units)``, divides by the joint RMS across all
+    $d \cdot M$ latent coordinates, and applies a per-unit gain $\gamma_u$ shared
+    equally across all $d$ basis coordinates of unit $u$:
 
     $$\mathrm{HyperRMSNorm}(z)_{b, u} = \gamma_u \, \frac{z_{b, u}}
-        {\sqrt{\frac{1}{d}\sum_{a=0}^{d-1} z_{a, u}^2 + \varepsilon}}.$$
+        {\sqrt{\frac{1}{d M}\sum_{a=0}^{d-1}\sum_{v=0}^{M-1} z_{a, v}^2 + \varepsilon}}.$$
 
-    Scaling all $d$ basis coordinates equally preserves hypercomplex phase /
-    orientation between stacked [`HyperDense`][hypercast4d.layers.HyperDense] layers.
+    Scaling all $d$ basis coordinates of each unit by the exact same scalar
+    preserves hypercomplex phase/orientation between stacked
+    [`HyperDense`][hypercast4d.layers.HyperDense] layers while also preserving
+    relative magnitudes across units (avoiding small-sample per-tuple variance
+    spikes).
 
     Parameters
     ----------
@@ -150,27 +153,31 @@ class HyperRMSNorm(nn.Module):
         self.weight = nn.Parameter(torch.ones(num_units))
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """Normalize ``(*, d * num_units)`` jointly over each $d$-component tuple."""
+        """Normalize ``(*, d * num_units)`` jointly while preserving per-unit basis direction."""
         expected = self.component_count * self.num_units
         if inputs.shape[-1] != expected:
             raise ValueError(
                 f"Expected last dim {expected}, got {inputs.shape[-1]}"
             )
         grouped = inputs.reshape(*inputs.shape[:-1], self.component_count, self.num_units)
-        rms_inv = torch.rsqrt(grouped.square().mean(dim=-2, keepdim=True) + self.eps)
+        rms_inv = torch.rsqrt(grouped.square().mean(dim=(-2, -1), keepdim=True) + self.eps)
         scaled = grouped * rms_inv * self.weight.unsqueeze(0)
         return scaled.reshape(inputs.shape)
 
 
 class HyperGate(nn.Module):
-    r"""Scalar-gated hypercomplex nonlinearity preserving $d$-component orientation.
+    r"""Bounded scalar-gated hypercomplex nonlinearity preserving $d$-component orientation.
 
     Computes a real scalar gate $g_u$ for each hypercomplex unit $u \in \{0, \dots, M-1\}$
     from both a linear basis projection and the Euclidean tuple norm, then scales all
-    $d$ components of unit $u$ together via $\mathrm{SiLU}(g_u)$:
+    $d$ components of unit $u$ together via bounded sigmoid gating $\sigma(g_u) \in (0, 1)$:
 
     $$g_u = \sum_{a=0}^{d-1} W_{a, u} z_{a, u} + \beta_u \|z_{:, u}\|_2 + c_u,
-      \qquad y_{b, u} = z_{b, u}\, \mathrm{SiLU}(g_u).$$
+      \qquad y_{b, u} = z_{b, u}\, \sigma(g_u).$$
+
+    Using bounded sigmoid gating (GLU-style) preserves linear $O(\|z\|)$ activation
+    scaling across deep residual stacks while keeping all $d$ basis coordinates
+    coupled in direction.
 
     Parameters
     ----------
@@ -203,7 +210,7 @@ class HyperGate(nn.Module):
         nn.init.zeros_(self.bias)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        """Apply tuple-preserving gated nonlinearity to ``(*, d * num_units)``."""
+        """Apply bounded tuple-preserving gated nonlinearity to ``(*, d * num_units)``."""
         expected = self.component_count * self.num_units
         if inputs.shape[-1] != expected:
             raise ValueError(
@@ -212,7 +219,7 @@ class HyperGate(nn.Module):
         grouped = inputs.reshape(*inputs.shape[:-1], self.component_count, self.num_units)
         linear_term = (grouped * self.gate_weight).sum(dim=-2)
         norm_term = torch.sqrt(grouped.square().sum(dim=-2) + self.eps) * self.norm_weight
-        gate = F.silu(linear_term + norm_term + self.bias).unsqueeze(-2)
+        gate = torch.sigmoid(linear_term + norm_term + self.bias).unsqueeze(-2)
         return (grouped * gate).reshape(inputs.shape)
 
 

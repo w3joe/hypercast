@@ -22,11 +22,16 @@ def test_hyper_rms_norm_preserves_component_direction() -> None:
     norm = HyperRMSNorm(component_count=4, num_units=6)
     x = torch.randn(3, 8, 24)
     y1 = norm(x)
-    # Scaling every 4-tuple by a positive scalar alpha must leave HyperRMSNorm invariant
-    alpha = torch.rand(3, 8, 1, 6) * 4.0 + 0.5
-    x_scaled = (x.reshape(3, 8, 4, 6) * alpha).reshape(3, 8, 24)
-    y2 = norm(x_scaled)
+    # Scaling the full token vector by a positive scalar alpha leaves HyperRMSNorm invariant
+    # and preserves every unit's relative direction across its 4 basis components
+    alpha = torch.rand(3, 8, 1) * 4.0 + 0.5
+    y2 = norm(x * alpha)
     torch.testing.assert_close(y1, y2, atol=1e-4, rtol=1e-4)
+    xg = x.reshape(3, 8, 4, 6)
+    yg = y1.reshape(3, 8, 4, 6)
+    ratios = yg / (xg + 1e-8)
+    for b in range(1, 4):
+        torch.testing.assert_close(ratios[:, :, 0, :], ratios[:, :, b, :], atol=1e-4, rtol=1e-4)
 
 
 def test_hyper_gate_scales_basis_components_uniformly_per_unit() -> None:
@@ -35,10 +40,13 @@ def test_hyper_gate_scales_basis_components_uniformly_per_unit() -> None:
     y = gate(x)
     xg = x.reshape(2, 6, 4, 5)
     yg = y.reshape(2, 6, 4, 5)
-    # Ratio y[b] / x[b] must be identical across all 4 basis components b=0..3!
+    # Ratio y[b] / x[b] must be identical across all 4 basis components b=0..3
     ratios = yg / xg
     for b in range(1, 4):
         torch.testing.assert_close(ratios[:, :, 0, :], ratios[:, :, b, :], atol=1e-5, rtol=1e-5)
+    # Bounded sigmoid gating guarantees ||y||_2 <= ||x||_2 even at large input scale
+    large = torch.randn(2, 6, 20) * 100.0
+    assert gate(large).detach().norm().item() <= large.norm().item() + 1e-4
 
 
 @pytest.mark.parametrize(

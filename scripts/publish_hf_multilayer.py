@@ -188,53 +188,121 @@ def generate_figures(run_dir: Path, single_dir: Path, assets_dir: Path) -> None:
     # Figure 1: Normal vs. Single-Layer vs. Multi-Layer Progression
     # ------------------------------------------------------------------
     fig, (ax1, ax2) = plt.subplots(
-        1, 2, figsize=(13.6, 5.3), gridspec_kw={"width_ratios": [1.15, 1.15]}
+        1, 2, figsize=(13.8, 5.5), gridspec_kw={"width_ratios": [1.22, 1.08]}
     )
 
-    # Panel A: Single-Layer vs Multi-Layer gain over Dense Real across matched families + Pooled
-    fams = ["TSMixer\n(Cross-Ch MLP)", "iTransformer\n(Variate Attn)", "Crossformer\n(Cross-Dim Attn)", "All Pooled\nCells"]
-    single_meds = [
-        float(s_cells[s_cells["backbone"] == "tsmixer"]["val_hd_vs_real_pct"].median()),
-        float(s_cells[s_cells["backbone"] == "itransformer"]["val_hd_vs_real_pct"].median()),
-        float(s_cells[s_cells["backbone"] == "crossformer"]["val_hd_vs_real_pct"].median()),
+    # Panel A: Explicit 3-Stage Comparison relative to Normal 1-Layer TSLib (0% baseline)
+    # AND Same-Depth Dense Real across matched families + Pooled Summary
+    s_tsm = s_cells[s_cells["backbone"] == "tsmixer"]
+    s_itr = s_cells[s_cells["backbone"] == "itransformer"]
+
+    def _matched_three_way(bkbn: str) -> tuple[float, float, float]:
+        """Return median % gain vs Normal 1-Layer Native for (Single-HD, Multi-Dense, Multi-HD)."""
+        shd, mdense, mhd = [], [], []
+        for ds in DATASET_ORDER:
+            ss = s_cells[(s_cells["dataset"] == ds) & (s_cells["backbone"] == bkbn)]
+            mc = cells[
+                (cells["dataset"] == ds)
+                & (cells["model_name"] == f"{bkbn}_cc")
+                & (cells["budget_mode"] == "compress")
+            ]
+            if ss.empty or mc.empty:
+                continue
+            nat = float(ss.iloc[0]["native_test_mae"])
+            s_val = float(ss.iloc[0]["val_selected_hd_test_mae"])
+            ms = cfgs[
+                (cfgs["dataset"] == ds)
+                & (cfgs["model_name"] == f"{bkbn}_cc")
+                & (cfgs["budget_mode"] == "compress")
+            ].set_index("arm")
+            m_real = float(ms.loc["real", "eval_mae"])
+            m_val = float(ms.loc[mc.iloc[0]["selected_hd"], "eval_mae"])
+            shd.append((1.0 - s_val / nat) * 100.0)
+            mdense.append((1.0 - m_real / nat) * 100.0)
+            mhd.append((1.0 - m_val / nat) * 100.0)
+        return float(np.median(shd)), float(np.median(mdense)), float(np.median(mhd))
+
+    tsm_3 = _matched_three_way("tsmixer")
+
+    fams = [
+        "TSMixer\n(vs Normal 1L)",
+        "TSMixer\n(vs 3L Real)",
+        "iTransformer\n(vs 3L Real)",
+        "All Pooled\n(vs Real)",
+    ]
+    v_single = [
+        tsm_3[0],
+        float(s_tsm["val_hd_vs_real_pct"].median()),
+        float(s_itr["val_hd_vs_real_pct"].median()),
         float(s_cells["val_hd_vs_real_pct"].median()),
     ]
-    multi_meds = [
+    v_multi = [
+        tsm_3[2],
         float(cells[(cells["model_name"] == "tsmixer_cc") & (cells["budget_mode"] == "compress")]["hd_vs_real_pct"].median()),
         float(cells[(cells["model_name"] == "itransformer_cc") & (cells["budget_mode"] == "compress")]["hd_vs_real_pct"].median()),
-        float(cells[(cells["model_name"] == "crossformer_cc") & (cells["budget_mode"] == "compress")]["hd_vs_real_pct"].median()),
         float(cells["hd_vs_real_pct"].median()),
     ]
+    v_mdense_ref = [tsm_3[1], 0.0, 0.0, 0.0]
+
     x = np.arange(len(fams))
-    w = 0.34
-    b_s = ax1.bar(
-        x - w / 2, single_meds, width=w, color=PALETTE["single"],
-        label="Single-Layer Surgery (1 site · ~8% param savings)", zorder=3
+    w = 0.26
+    b0 = ax1.bar(
+        x - w,
+        v_mdense_ref,
+        width=w,
+        color="#CBD5E1",
+        edgecolor="#64748B",
+        label="Normal / Dense Baseline (3L Dense = -0.58% vs 1L)",
+        zorder=3,
     )
-    b_m = ax1.bar(
-        x + w / 2, multi_meds, width=w, color=PALETTE["hd"],
-        label="Multi-Layer Cross-Channel (All sites · ~40–65% savings)", zorder=3
+    b1 = ax1.bar(
+        x,
+        v_single,
+        width=w,
+        color=PALETTE["single"],
+        label="Single-Layer HyperDense (1 site · ~8% savings · p=0.048)",
+        zorder=3,
+    )
+    b2 = ax1.bar(
+        x + w,
+        v_multi,
+        width=w,
+        color=PALETTE["hd"],
+        label="Multi-Layer HyperDense (All sites · ~40–65% savings · p=0.0016)",
+        zorder=3,
     )
     ax1.axhline(0.0, color="#334155", linewidth=1.0, zorder=2)
-    for bars, col_txt in ((b_s, "#334155"), (b_m, PALETTE["hd"])):
+
+    for bars, col_txt, skip_zero in ((b0, "#475569", True), (b1, "#334155", False), (b2, PALETTE["hd"], False)):
         for b in bars:
             v = b.get_height()
+            if skip_zero and abs(v) < 1e-6:
+                ax1.text(
+                    b.get_x() + b.get_width() / 2,
+                    0.06,
+                    "0.0%\n(Base)",
+                    ha="center",
+                    va="bottom",
+                    fontsize=7.4,
+                    color="#64748B",
+                )
+                continue
             ax1.text(
                 b.get_x() + b.get_width() / 2,
-                v + (0.08 if v >= 0 else -0.18),
+                v + (0.08 if v >= 0 else -0.14),
                 f"{v:+.2f}%",
                 ha="center",
                 va="bottom" if v >= 0 else "top",
-                fontsize=8.5,
+                fontsize=8.2,
                 fontweight="bold",
                 color=col_txt,
             )
     ax1.set_xticks(x)
     ax1.set_xticklabels(fams, fontweight="bold")
-    ax1.set_ylim(-0.75, 3.45)
-    ax1.set_ylabel("Median Test MAE Gain vs. Same-Depth Dense Real (%)")
-    ax1.set_title("A. Single-Layer vs. Multi-Layer Lift (Zero Test Leakage)")
-    ax1.legend(loc="upper right")
+    ax1.set_ylim(-0.95, 4.15)
+    ax1.set_ylabel("Median Held-Out Test MAE Improvement (%)")
+    ax1.set_title("A. Normal vs. Single-Layer vs. Multi-Layer Accuracy Lift")
+    ax1.legend(loc="upper left", fontsize=8.1)
 
     # Panel B: Best Multi-Layer HyperDense vs #1 Best of ALL 15 Unmodified Normal TSLib Models
     overlap_ds = ["nyc_taxi", "weather", "ettm2", "ettm1", "etth2", "exchange", "ili", "traffic", "electricity"]

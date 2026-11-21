@@ -643,6 +643,18 @@ configs:
     data_files:
       - split: test
         path: data/validation_cells.parquet
+  - config_name: multilayer_fits
+    data_files:
+      - split: test
+        path: data/multilayer_fits.parquet
+  - config_name: multilayer_configs
+    data_files:
+      - split: test
+        path: data/multilayer_configs.parquet
+  - config_name: multilayer_validation_cells
+    data_files:
+      - split: test
+        path: data/multilayer_validation_cells.parquet
 ---
 
 # HyperCAST Part 1: Multi-Dataset TSLib-15 × HyperDense Benchmark (`3,157` GPU Fits)
@@ -664,7 +676,25 @@ Complete experimental records, validation-selected statistical tests, and per-ep
 
 ---
 
-## Key Takeaways at a Glance
+## Multi-Layer Cross-Channel Update (`1,881` Additional Fits Across All 10 Datasets)
+
+Following the single-site surgical study below, we ran **Part 2 ([`w3joe/hypercast-multilayer-10ds-benchmark`](https://huggingface.co/datasets/w3joe/hypercast-multilayer-10ds-benchmark))**, routing channels into a learned hypercomplex basis and replacing **all cross-channel mixing layers across stacked blocks (`24%–94%` of weights)**:
+
+- **~4× Larger Median Lift & 30× Stronger Significance:** Validation-selected Multi-Layer HyperDense beats Dense `real` on **`31 / 48` cells (`64.6%`, median `+0.88%`, mean `+1.20%`, Wilcoxon *p* = `0.00156`)** while shrinking whole-model parameters by **36%–65%**.
+- **Top-3 Fixed Operators Overall Are All Hypercomplex:** Without any validation selection, **`Complex (2D)` (`+0.68%`)**, **`Coquaternion (4D · split)` (`+0.63%`, `34/48 = 70.8%` wins)**, and **`Quaternion (4D)` (`+0.55%`)** rank `#1, #2, #3` ahead of every `LowRank` and `BlockDiag` arm.
+- **Beats the #1 Best of All 15 Unmodified TSLib Models on 5 Datasets:** Native `HyperChannelMixer` (`HyperRMSNorm` + bounded `HyperGate`) sets new overall bests on `NYC Taxi (+3.39%)`, `Weather (+1.32%)`, `ETTm2 (+0.44%)`, `ETTm1 (+0.39%)`, and `ETTh2 (+0.36%)`.
+
+![Normal vs Single-Layer vs Multi-Layer Progression](assets/ml_fig1_normal_vs_single_vs_multilayer.png)
+
+![Multi-Layer Tracks vs All Controls](assets/ml_fig2_track_and_control_comparison.png)
+
+![Complete 10x5 Multi-Layer Matrix](assets/ml_fig3_heatmap_10x5.png)
+
+![Algebraic Signature Diversity & Operator Ranking](assets/ml_fig4_algebra_family_breakdown.png)
+
+---
+
+## Part 1 Key Takeaways (Single-Site Surgical Study)
 
 1. **Lossless 2×–8× Layer Compression Across Diverse Domains:** Selecting the hypercomplex algebra strictly on inner validation MAE (**zero test leakage**) beats variance-matched dense `real` on **79 / 131 cells (`60.3%`, Sign *p* = `0.023`, Wilcoxon *p* = `0.048`)** while matching unmodified `native` TSLib (`51.9%`, *p* = `0.57`) at **12.5%–50%** of the replaced site's parameter budget.
 2. **Sharp High-Dimensional Regime Gain (`321–862` Channels):** On wide multivariate sensor grids (`electricity` 321ch and `traffic` 862ch), structured compression yields **`+3.66%` median (`+4.25%` mean)** test MAE improvement over `real` (`+4.46%` on `traffic`, beating both `native` and `lowrank`).
@@ -778,6 +808,12 @@ print(cells[["dataset", "backbone", "val_selected_hd_arm", "val_hd_vs_real_pct",
 
 def stage_hf_repo(run_dir: Path, full_zip: Path, stage_dir: Path, repo_id: str) -> None:
     """Populate ``stage_dir`` with Parquet splits, figures, CSVs, JSONs, and full archive."""
+    import sys as _sys
+
+    _sys.path.insert(0, str(ROOT / "scripts"))
+    from publish_hf_multilayer import compute_statistical_summary as _ml_stats
+    from publish_hf_multilayer import generate_figures as _ml_figs
+
     data_dir = stage_dir / "data"
     csv_dir = stage_dir / "csv"
     arch_dir = stage_dir / "archives"
@@ -787,6 +823,24 @@ def stage_hf_repo(run_dir: Path, full_zip: Path, stage_dir: Path, repo_id: str) 
     arch_dir.mkdir(parents=True, exist_ok=True)
 
     generate_figures(run_dir, assets_dir)
+
+    ml_dir = ROOT / "results" / "multilayer-10ds-20261120"
+    if (ml_dir / "raw-fits.csv").is_file():
+        _ml_stats(ml_dir, run_dir)
+        with tempfile.TemporaryDirectory(prefix="ml-figs-") as mtmp:
+            mp = Path(mtmp)
+            _ml_figs(ml_dir, run_dir, mp)
+            for png in sorted(mp.glob("*.png")):
+                shutil.copy2(png, assets_dir / f"ml_{png.name}")
+        pd.read_csv(ml_dir / "raw-fits.csv").to_parquet(
+            data_dir / "multilayer_fits.parquet", index=False
+        )
+        pd.read_csv(ml_dir / "summary.csv").to_parquet(
+            data_dir / "multilayer_configs.parquet", index=False
+        )
+        pd.read_csv(ml_dir / "gate-cells.csv").to_parquet(
+            data_dir / "multilayer_validation_cells.parquet", index=False
+        )
 
     fits_df = pd.read_csv(run_dir / "raw-all-3157-fits.csv")
     cfgs_df = pd.read_csv(run_dir / "all-datasets-summary.csv")

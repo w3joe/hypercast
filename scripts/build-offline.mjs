@@ -1,31 +1,18 @@
-// Produce a static Vercel Build Output directory. The deployed application has
-// no functions, API rewrites, credentials, cookies, or external compute origin.
+// Produce the static GitHub Pages site. The deployed application has no
+// functions, API rewrites, credentials, cookies, or external compute origin.
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const output = resolve('.vercel/output')
+// Project pages are served from /<repo>/; override with PAGES_BASE for a custom domain.
+const base = process.env.PAGES_BASE ?? '/hypercast/'
+const output = resolve('build/pages')
 rmSync(output, { recursive: true, force: true })
-mkdirSync(output, { recursive: true })
-execFileSync('npm', ['run', 'build', '--', '--outDir', resolve(output, 'static')], {
+execFileSync('npm', ['run', 'build', '--', '--outDir', output, '--emptyOutDir', '--base', base], {
   cwd: resolve('web'),
   stdio: 'inherit',
   env: { ...process.env, VITE_OFFLINE_DEMO: 'true', VITE_PUBLIC_DEMO: 'false' },
 })
-writeFileSync(resolve(output, 'config.json'), JSON.stringify({
-  version: 3,
-  routes: [
-    {
-      src: '/(.*)',
-      headers: {
-        'X-Content-Type-Options': 'nosniff',
-        'Referrer-Policy': 'strict-origin-when-cross-origin',
-        'X-Frame-Options': 'DENY',
-        'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
-      },
-      continue: true,
-    },
-    { handle: 'filesystem' },
-    { src: '/(.*)', dest: '/index.html' },
-  ],
-}, null, 2))
+// GitHub Pages serves 404.html for unknown paths, which gives direct-route reloads the SPA.
+copyFileSync(resolve(output, 'index.html'), resolve(output, '404.html'))
+writeFileSync(resolve(output, '.nojekyll'), '')

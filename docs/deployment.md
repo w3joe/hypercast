@@ -1,6 +1,7 @@
 # Browser-only Hypercast deployment
 
-The `deployment` branch publishes a static architecture playground on Vercel.
+The static architecture playground is published on GitHub Pages at
+<https://w3joe.github.io/hypercast/>.
 It has no API rewrite, server function, Modal workspace, account system, email
 gate, cookies, or server-side storage.
 
@@ -30,32 +31,25 @@ Build the normal connected frontend:
 npm --prefix web run build
 ```
 
-Build the static Vercel output:
+Build the static GitHub Pages site:
 
 ```sh
 node scripts/build-offline.mjs
 ```
 
 The static build sets `VITE_OFFLINE_DEMO=true` only for that build. It emits
-`.vercel/output/static` and a Build Output API configuration with SPA fallback
-and security headers. It defines no `/api` route or external origin.
+`build/pages` with the `/hypercast/` base path, a `404.html` SPA fallback, and
+`.nojekyll`. It defines no `/api` route or external origin. Set `PAGES_BASE=/`
+when serving from a custom domain.
 
-## Vercel project
+## GitHub Pages
 
-Link the repository root to the Vercel project `hypercast` (or
-`hypercast-w3joe` if that name is unavailable), select **Other** as the framework,
-and use `deployment` as the production branch. The checked-in `vercel.json`
-installs the frontend dependencies and runs the static build. No environment
-variables are required.
+`.github/workflows/pages.yml` builds and deploys the site on every push to
+`main`, and can also be started by hand from the Actions tab. In the repository
+settings, **Pages → Source** must be **GitHub Actions**. No secrets or
+environment variables are required.
 
-Deploy from the repository root:
-
-```sh
-npx vercel@latest link --yes --project hypercast
-npx vercel@latest --prod --yes
-```
-
-Verify the assigned production URL, a direct-route reload, preset switching,
+Verify the Pages URL, a direct-route reload, preset switching,
 editing, undo/redo, local save/reopen, import/export, the disabled Run and weight
 controls, and a mobile-width layout. Network requests should include only the
 site's static files, including `/offline-manifest.json`; there should be no

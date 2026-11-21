@@ -36,7 +36,7 @@ function unavailable(): never {
 }
 
 function manifest() {
-  manifestPromise ??= fetch('/offline-manifest.json', { cache: 'force-cache' }).then(async response => {
+  manifestPromise ??= fetch(`${import.meta.env.BASE_URL}offline-manifest.json`, { cache: 'force-cache' }).then(async response => {
     if (!response.ok) throw new Error('The offline architecture catalog could not be loaded.')
     return response.json() as Promise<OfflineManifest>
   })
@@ -44,7 +44,7 @@ function manifest() {
 }
 
 function archivedResults() {
-  resultsPromise ??= fetch('/offline-results.json', { cache: 'force-cache' }).then(async response => {
+  resultsPromise ??= fetch(`${import.meta.env.BASE_URL}offline-results.json`, { cache: 'force-cache' }).then(async response => {
     if (!response.ok) throw new Error('The read-only research results could not be loaded.')
     const data = await response.json() as { schema_version: number; result_count: number; fit_count: number; results: ArchivedComparisonJob[] }
     if (data.schema_version !== 1 || data.result_count !== 120 || data.fit_count !== 360 || data.results.length !== data.result_count) {

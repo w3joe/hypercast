@@ -6,9 +6,10 @@ mechanism-inspired templates. Full implementation of the collection is still
 incomplete; see [method coverage](docs/method_collection.md).
 Find it under **Builder → Method library**.
 
-For the static browser-only builder on Vercel, see the
-[deployment guide](docs/deployment.md). Visitors can design, save locally, and
-export graphs without creating an account. Training requires a connected installation.
+Try the static browser-only builder at
+[w3joe.github.io/hypercast](https://w3joe.github.io/hypercast/), served from
+GitHub Pages; see the [deployment guide](docs/deployment.md). Visitors can
+design, save locally, and export graphs without creating an account. Training requires a connected installation.
 
 Hypercast is a runnable, clean-room evaluation of the paper
 [*4D hypercomplex-valued neural network in multivariate time series

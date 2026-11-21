@@ -645,13 +645,18 @@ configs:
         path: data/validation_cells.parquet
 ---
 
-# HyperCAST: Multi-Dataset TSLib-15 × HyperDense Benchmark (`3,157` GPU Fits)
+# HyperCAST Part 1: Multi-Dataset TSLib-15 × HyperDense Benchmark (`3,157` GPU Fits)
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-w3joe%2Fhypercast-181717?logo=github)](https://github.com/w3joe/hypercast)
+[![Part 2 Benchmark](https://img.shields.io/badge/Companion_Part_2-Multi--Layer_10--Dataset_(1%2C881_Fits)-7C3AED)](https://huggingface.co/datasets/w3joe/hypercast-multilayer-10ds-benchmark)
 [![Completed Fits](https://img.shields.io/badge/GPU_Fits-3%2C157_%2F_3%2C168-4F46E5)](#)
 [![Datasets](https://img.shields.io/badge/Datasets-9_Domains_(7--862_Channels)-0D9488)](#per-dataset-breakdown)
 [![Backbones](https://img.shields.io/badge/TSLib_Backbones-15_Architectures-D97706)](#architecture-family-sensitivity)
 [![Hardware](https://img.shields.io/badge/Compute-16%C3%97_NVIDIA_L4_(IEEE_FP32)-334155)](#)
+
+> **Benchmark Suite Navigation:**  
+> - **Part 1 — Single-Site TSLib-15 Surgical Benchmark (`3,157` fits, *this dataset*):** Swaps **1 linear layer** (`1%–9%` of weights) across 15 TSLib models (`+0.23%` median vs. `real`, *p* = `0.048`).  
+> - **Part 2 — [10-Dataset Multi-Layer Cross-Channel Benchmark (`1,881` fits)](https://huggingface.co/datasets/w3joe/hypercast-multilayer-10ds-benchmark):** Replaces **all cross-channel projections across stacked blocks (`24%–94%` of weights)** across all 10 datasets (`+0.88%` median vs. `real`, *p* = `0.00156`, top-3 fixed operators all hypercomplex).
 
 Complete experimental records, validation-selected statistical tests, and per-epoch training trajectories for the **HyperCAST 9-Dataset × 15-Backbone × 8-Arm (`tslib15-multi-20261119`)** benchmark evaluating structured hypercomplex projections (**Complex 2D**, **Quaternion 4D**, **Octonion 8D**) against unmodified **TSLib (`native`)**, variance-matched **Dense (`real`)**, and parameter-matched **Low-Rank (`lowrank2`, `lowrank4`, `lowrank8`)** controls.
 
